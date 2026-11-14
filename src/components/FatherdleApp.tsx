@@ -126,7 +126,7 @@ export function FatherdleApp({
   const [isPasteOpen, setIsPasteOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState("");
-  const [shareModalMode, setShareModalMode] = useState<"league" | "game" | null>(null);
+  const [shareModalMode, setShareModalMode] = useState<"league" | "day" | null>(null);
 
   const fetchLeagueData = useCallback(async () => {
     setLoading(true);
@@ -1525,11 +1525,11 @@ export function FatherdleApp({
                 </span>
                 <button
                   type="button"
-                  onClick={() => setShareModalMode("game")}
+                  onClick={() => setShareModalMode("day")}
                   className="mt-1 px-4 py-2.5 rounded-full bg-[#121212] text-text text-[13px] font-bold inline-flex items-center gap-2 hover:opacity-90 whitespace-nowrap self-start sm:self-end"
                 >
                   <Share2 className="w-4 h-4" />
-                  <span>Share my result</span>
+                  <span>Share my day</span>
                 </button>
               </div>
             </div>
@@ -1938,14 +1938,16 @@ export function FatherdleApp({
           onClose={() => setShareModalMode(null)}
           mode={shareModalMode}
           playerRow={
-            activeTab === "players" && data.playerPage.standingRow
+            shareModalMode === "day"
+              ? data.today.standings.find((r) => r.player.id === currentUserId) ??
+                currentUserStandingRow
+              : activeTab === "players" && data.playerPage.standingRow
               ? data.playerPage.standingRow
               : currentUserStandingRow
           }
           allStandings={data.stats.standings}
-          period={data.period}
-          game={data.gamePage.game}
-          gameStanding={data.gamePage.todayStanding}
+          period={shareModalMode === "day" ? { ...data.period, endDate: data.todayDate } : data.period}
+          dayGames={data.today.games}
         />
       )}
     </div>
