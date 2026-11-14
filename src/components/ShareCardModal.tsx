@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef } from "react";
-import { Download, X } from "lucide-react";
+import { Download, Share2, X } from "lucide-react";
 import { DailyGameStanding, DatePeriod, GameConfig, GameSlug, PlayerStandingRow } from "@/lib/types";
 import { APP_WORDMARK, GAMES } from "@/lib/constants";
 
@@ -56,7 +56,7 @@ export function ShareCardModal({
 
   const maxPts = Math.max(1, ...allStandings.map((r) => r.totalPoints));
 
-  const handleDownloadSvgCard = () => {
+  const handleDownloadSvgCard = (useWebShare = false) => {
     // Generate a 1080x1350 PNG using Canvas so the user gets a real 4:5 share image
     const canvas = document.createElement("canvas");
     canvas.width = 1080;
@@ -220,10 +220,30 @@ export function ShareCardModal({
       });
     }
 
-    const link = document.createElement("a");
-    link.download = `fatherdle-${mode}-${period.endDate}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    const fileName = `fatherdle-${mode}-${period.endDate}.png`;
+    const download = () => {
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    };
+
+    if (!useWebShare) {
+      download();
+      return;
+    }
+    canvas.toBlob(async (blob) => {
+      const file = blob ? new File([blob], fileName, { type: "image/png" }) : null;
+      if (file && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: "Fatherdle" });
+        } catch {
+          // User cancelled the share sheet.
+        }
+      } else {
+        download();
+      }
+    }, "image/png");
   };
 
   // Visual preview matching 9-share-card-league-1080x1350.png and 10-share-card-game-1080x1350.png
@@ -235,7 +255,15 @@ export function ShareCardModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleDownloadSvgCard}
+              onClick={() => handleDownloadSvgCard(true)}
+              className="px-3.5 py-1.5 rounded-full border border-line text-text text-xs font-bold flex items-center gap-1.5"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDownloadSvgCard(false)}
               className="px-3.5 py-1.5 rounded-full bg-lime text-[#121212] text-xs font-bold flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
