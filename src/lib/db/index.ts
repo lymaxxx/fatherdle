@@ -63,10 +63,34 @@ let loading: Promise<LeagueData> | null = null;
 let writeChain: Promise<void> = Promise.resolve();
 
 /** Netlify configures Blobs automatically; the env vars are a manual fallback. */
+/**
+ * Next.js wraps the global fetch with its own caching layer; Blobs requests made through it were
+ * hanging on Netlify, so hand the Blobs client the original, unwrapped fetch.
+ */
+function rawFetch(): typeof fetch {
+  const f = globalThis.fetch as typeof fetch & { _nextOriginalFetch?: typeof fetch };
+  return f._nextOriginalFetch ?? f;
+}
+
+/** Netlify configures Blobs automatically; the env vars are a manual fallback. */
 function blobStore() {
   const siteID = process.env.FATHERDLE_BLOBS_SITE_ID;
   const token = process.env.FATHERDLE_BLOBS_TOKEN;
-  return siteID && token ? getStore({ name: BLOB_STORE, siteID, token }) : getStore(BLOB_STORE);
+  return siteID && token
+    ? getStore({ name: BLOB_STORE, siteID, token, fetch: rawFetch() })
+    : getStore({ name: BLOB_STORE, fetch: rawFetch() });
+}
+
+/** What the server can see about its Blobs setup, for /api/health. */
+export function blobDiagnostics() {
+  const f = globalThis.fetch as typeof fetch & { _nextOriginalFetch?: unknown; __nextPatched?: unknown };
+  return {
+    envContext: Boolean(process.env.NETLIFY_BLOBS_CONTEXT),
+    globalContext: Boolean((globalThis as { netlifyBlobsContext?: unknown }).netlifyBlobsContext),
+    manualCredentials: Boolean(process.env.FATHERDLE_BLOBS_SITE_ID && process.env.FATHERDLE_BLOBS_TOKEN),
+    fetchPatchedByNext: Boolean(f.__nextPatched),
+    usingOriginalFetch: Boolean(f._nextOriginalFetch),
+  };
 }
 
 /** Fail with a readable message instead of hanging until the platform kills the request. */
