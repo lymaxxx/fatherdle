@@ -64,9 +64,7 @@ let writeChain: Promise<void> = Promise.resolve();
 function blobStore() {
   const siteID = process.env.FATHERDLE_BLOBS_SITE_ID;
   const token = process.env.FATHERDLE_BLOBS_TOKEN;
-  return siteID && token
-    ? getStore({ name: BLOB_STORE, siteID, token, consistency: "strong" })
-    : getStore({ name: BLOB_STORE, consistency: "strong" });
+  return siteID && token ? getStore({ name: BLOB_STORE, siteID, token }) : getStore(BLOB_STORE);
 }
 
 /** Fail with a readable message instead of hanging until the platform kills the request. */
@@ -89,11 +87,23 @@ function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T>
 async function readPersisted(): Promise<LeagueData | null> {
   if (onNetlify()) {
     const store = blobStore();
-    return (
-      ((await withTimeout(store.get(BLOB_KEY, { type: "json" }), 6000, "Netlify Blobs read")) as
-        | LeagueData
-        | null) ?? null
-    );
+    let value: unknown;
+    try {
+      // Strongly consistent read first so a second function instance sees fresh writes...
+      value = await withTimeout(
+        store.get(BLOB_KEY, { type: "json", consistency: "strong" }),
+        2500,
+        "Netlify Blobs strong read"
+      );
+    } catch {
+      // ...but if that path is unavailable here, fall back to the default read.
+      value = await withTimeout(
+        store.get(BLOB_KEY, { type: "json" }),
+        4000,
+        "Netlify Blobs read"
+      );
+    }
+    return (value as LeagueData | null) ?? null;
   }
   try {
     return JSON.parse(fs.readFileSync(LOCAL_FILE, "utf8")) as LeagueData;
@@ -104,16 +114,22 @@ async function readPersisted(): Promise<LeagueData | null> {
 
 async function writePersisted(data: LeagueData): Promise<void> {
   if (onNetlify()) {
-    const store = blobStore();
-    await withTimeout(store.setJSON(BLOB_KEY, data), 6000, "Netlify Blobs write");
+    await withTimeout(blobStore().setJSON(BLOB_KEY, data), 6000, "Netlify Blobs write");
     return;
   }
   fs.mkdirSync(path.dirname(LOCAL_FILE), { recursive: true });
   fs.writeFileSync(LOCAL_FILE, JSON.stringify(data));
 }
 
-async function load(): Promise<LeagueData> {
-  if (cache) return cache;
+const CACHE_TTL_MS = 2000;
+let cachedAt = 0;
+
+/**
+ * Several function instances can run at once, so the in-memory copy is only trusted for a
+ * couple of seconds, and every write starts from a fresh read.
+ */
+async function load(forWrite = false): Promise<LeagueData> {
+  if (cache && !forWrite && Date.now() - cachedAt < CACHE_TTL_MS) return cache;
   if (!loading) {
     loading = (async () => {
       let data = await readPersisted();
@@ -122,6 +138,7 @@ async function load(): Promise<LeagueData> {
         await writePersisted(data);
       }
       cache = data;
+      cachedAt = Date.now();
       return data;
     })().finally(() => {
       loading = null;
@@ -132,7 +149,10 @@ async function load(): Promise<LeagueData> {
 
 /** Serialise writes so concurrent requests can't clobber each other. */
 function persist(data: LeagueData): Promise<void> {
-  writeChain = writeChain.then(() => writePersisted(data));
+  writeChain = writeChain.then(async () => {
+    await writePersisted(data);
+    cachedAt = Date.now();
+  });
   return writeChain;
 }
 
@@ -579,7 +599,7 @@ export async function getSubmissionsInRange(
 export async function upsertSubmission(
   sub: Omit<Submission, "id" | "submittedAt"> & { id?: string; submittedAt?: string }
 ): Promise<Submission> {
-  const data = await load();
+  const data = await load(true);
   const existing = data.submissions.find(
     (s) =>
       s.playerId === sub.playerId && s.gameSlug === sub.gameSlug && s.leagueDate === sub.leagueDate
@@ -599,7 +619,7 @@ export async function upsertSubmission(
 export async function upsertSubmissions(
   subs: Array<Omit<Submission, "id" | "submittedAt">>
 ): Promise<Submission[]> {
-  const data = await load();
+  const data = await load(true);
   const out: Submission[] = [];
   for (const sub of subs) {
     const existing = data.submissions.find(
@@ -639,7 +659,7 @@ export async function createPlayer(
   color?: string,
   joinedAt: string = getTodayDate()
 ): Promise<Player> {
-  const data = await load();
+  const data = await load(true);
   const cleanName = name.trim();
   const slug = cleanName
     .toLowerCase()
