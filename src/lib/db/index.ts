@@ -79,9 +79,20 @@ export function initSchema(db: Database.Database): void {
 
 function seedIfEmpty(db: Database.Database): void {
   const insertGame = db.prepare(`
-    INSERT OR REPLACE INTO games (
+    INSERT INTO games (
       slug, name, short_name, color, text_color, url, description, ranking_direction, unit, min_submissions, axis_start
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(slug) DO UPDATE SET
+      name = excluded.name,
+      short_name = excluded.short_name,
+      color = excluded.color,
+      text_color = excluded.text_color,
+      url = excluded.url,
+      description = excluded.description,
+      ranking_direction = excluded.ranking_direction,
+      unit = excluded.unit,
+      min_submissions = excluded.min_submissions,
+      axis_start = excluded.axis_start
   `);
 
   const seedGamesTx = db.transaction(() => {

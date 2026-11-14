@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fatherdle — Daily Games League",
+  title: "Fatherdle — Daily games. One table.",
   description: "Daily games. One table. Statistics, standings, and multi-game score tracker.",
 };
 

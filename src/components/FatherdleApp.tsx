@@ -45,7 +45,7 @@ import { HighlightBlocks } from "./HighlightBlocks";
 import { PasteResultModal } from "./PasteResultModal";
 import { ShareCardModal } from "./ShareCardModal";
 
-type NavTab = "today" | "statistics" | "games" | "players" | "onboarding";
+export type NavTab = "today" | "statistics" | "games" | "players" | "onboarding";
 
 interface LeagueApiResponse {
   todayDate: string;
@@ -91,16 +91,25 @@ function formatOrdinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-export function FatherdleApp() {
-  const [activeTab, setActiveTab] = useState<NavTab>("statistics");
+const IDENTITY_KEY = "fatherdle.playerId";
+
+export function FatherdleApp({
+  initialTab,
+  initialGameSlug,
+}: {
+  initialTab?: NavTab;
+  initialGameSlug?: GameSlug;
+} = {}) {
+  const [activeTab, setActiveTab] = useState<NavTab>(initialTab ?? "statistics");
   const [preset, setPreset] = useState<PeriodPreset>("week");
   const [customStart, setCustomStart] = useState("2026-11-01");
   const [customEnd, setCustomEnd] = useState("2026-11-14");
 
   const [currentUserId, setCurrentUserId] = useState("p_alex");
   const [viewedPlayerId, setViewedPlayerId] = useState("p_alex");
-  const [selectedGameSlug, setSelectedGameSlug] = useState<GameSlug>("maptap");
-  const [hasJoined, setHasJoined] = useState(true);
+  const [selectedGameSlug, setSelectedGameSlug] = useState<GameSlug>(initialGameSlug ?? "maptap");
+  const [hasJoined, setHasJoined] = useState(false);
+  const [identityChecked, setIdentityChecked] = useState(false);
 
   const [data, setData] = useState<LeagueApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,6 +157,34 @@ export function FatherdleApp() {
     fetchLeagueData();
   }, [fetchLeagueData]);
 
+  // Restore identity from this browser; first-time visitors land on onboarding.
+  useEffect(() => {
+    if (!data || identityChecked) return;
+    const saved = window.localStorage.getItem(IDENTITY_KEY);
+    if (saved && data.players.some((p) => p.id === saved)) {
+      setCurrentUserId(saved);
+      setViewedPlayerId(saved);
+      setHasJoined(true);
+    } else if (!initialTab) {
+      setActiveTab("onboarding");
+    }
+    setIdentityChecked(true);
+  }, [data, identityChecked, initialTab]);
+
+  // Keep the URL in step with the Games tab (/games/[slug]).
+  useEffect(() => {
+    if (!identityChecked) return;
+    const path = activeTab === "games" ? `/games/${selectedGameSlug}` : "/";
+    if (window.location.pathname !== path) window.history.replaceState(null, "", path);
+  }, [activeTab, selectedGameSlug, identityChecked]);
+
+  const chooseIdentity = (id: string) => {
+    window.localStorage.setItem(IDENTITY_KEY, id);
+    setCurrentUserId(id);
+    setViewedPlayerId(id);
+    setHasJoined(true);
+  };
+
   const toggleVisiblePlayer = (id: string) => {
     setVisiblePlayerIds((prev) =>
       prev.includes(id)
@@ -181,9 +218,7 @@ export function FatherdleApp() {
     });
     const json = await res.json();
     if (json.player) {
-      setCurrentUserId(json.player.id);
-      setViewedPlayerId(json.player.id);
-      setHasJoined(true);
+      chooseIdentity(json.player.id);
       setNewPlayerName("");
       setIsJoinModalOpen(false);
       setActiveTab("today");
@@ -327,48 +362,44 @@ export function FatherdleApp() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-2.5">
-            {/* Active Player Switcher ("you") */}
-            <div className="flex items-center gap-1.5 bg-surface border border-line/70 rounded-full pl-2 pr-3 py-1">
-              <span
-                style={{ backgroundColor: currentUserPlayer?.color || "#FF8A3D" }}
-                className="w-5 h-5 rounded-full text-[#121212] text-[11px] font-extrabold flex items-center justify-center"
-              >
-                {currentUserPlayer?.avatarInitials}
-              </span>
-              <select
-                aria-label="Current player identity"
-                value={currentUserId}
-                onChange={(e) => {
-                  setCurrentUserId(e.target.value);
-                  setViewedPlayerId(e.target.value);
-                }}
-                className="bg-transparent text-[12px] font-bold text-text focus:outline-none cursor-pointer"
-              >
-                {data.players.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-surface text-text">
-                    {p.name} (you)
+            {hasJoined ? (
+              <div className="flex items-center gap-1.5 bg-surface border border-line/70 rounded-full pl-2 pr-3 py-1">
+                <span
+                  style={{ backgroundColor: currentUserPlayer?.color || "#FF8A3D" }}
+                  className="w-5 h-5 rounded-full text-[#121212] text-[11px] font-extrabold flex items-center justify-center"
+                >
+                  {currentUserPlayer?.avatarInitials}
+                </span>
+                <select
+                  aria-label="Current player identity"
+                  value={currentUserId}
+                  onChange={(e) => {
+                    if (e.target.value === "__add") {
+                      setIsJoinModalOpen(true);
+                      return;
+                    }
+                    chooseIdentity(e.target.value);
+                  }}
+                  className="bg-transparent text-[12px] font-bold text-text focus:outline-none cursor-pointer"
+                >
+                  {data.players.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-surface text-text">
+                      {p.name} (you)
+                    </option>
+                  ))}
+                  <option value="__add" className="bg-surface text-text">
+                    + Add player…
                   </option>
-                ))}
-              </select>
-            </div>
-
-            {!hasJoined ? (
-              <button
-                type="button"
-                onClick={() => setActiveTab("onboarding")}
-                className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-full border border-line text-[12px] font-bold text-text hover:bg-surface"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Join the league</span>
-              </button>
+                </select>
+              </div>
             ) : (
               <button
                 type="button"
                 onClick={() => setIsJoinModalOpen(true)}
-                className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-line text-[12px] font-bold text-muted hover:text-text hover:bg-surface"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-line text-[12px] font-bold text-text hover:bg-surface"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>Add player</span>
+                <span>Join the league</span>
               </button>
             )}
 
@@ -443,7 +474,7 @@ export function FatherdleApp() {
               <button
                 type="button"
                 onClick={() => setIsPasteOpen(true)}
-                className="w-full h-[60px] rounded-full border border-line text-text text-[16px] font-bold flex items-center justify-center gap-2 hover:bg-surface"
+                className="hidden md:flex w-full h-[60px] rounded-full border border-line text-text text-[16px] font-bold items-center justify-center gap-2 hover:bg-surface"
               >
                 <ClipboardPaste className="w-5 h-5" />
                 <span>Paste a result</span>
@@ -1454,7 +1485,7 @@ export function FatherdleApp() {
               className="text-[#121212] rounded-[26px] p-6 sm:p-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6"
             >
               <div className="space-y-2 min-w-0 flex-1">
-                <h1 className="font-serif text-[44px] sm:text-[64px] lg:text-[72px] leading-[0.95] tracking-tight break-words">
+                <h1 className={`font-serif leading-[0.95] tracking-tight break-words ${data.gamePage.game.name.length > 14 ? "text-[30px] sm:text-[48px] lg:text-[60px]" : "text-[44px] sm:text-[64px] lg:text-[72px]"}`}>
                   {data.gamePage.game.name}
                 </h1>
                 <p className="text-[15px] font-semibold max-w-xl">
@@ -1843,6 +1874,29 @@ export function FatherdleApp() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+            <div>
+              <p className="text-xs font-bold text-muted uppercase tracking-wider mb-1.5">
+                Already in the league?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {data.players.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      chooseIdentity(p.id);
+                      setIsJoinModalOpen(false);
+                      setActiveTab("today");
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-line text-xs font-bold text-text hover:bg-surface2"
+                  >
+                    <span style={{ backgroundColor: p.color }} className="w-2 h-2 rounded-full" />
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs font-bold text-muted uppercase tracking-wider">Or join as new</p>
             <form onSubmit={handleJoinSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">
