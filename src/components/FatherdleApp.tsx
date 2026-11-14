@@ -494,18 +494,34 @@ export function FatherdleApp({
                   Today&apos;s league
                 </h1>
                 <p className="text-[14px] text-muted mt-2 font-medium">
-                  Sat 14 Nov ·{" "}
+                  {new Date(`${data.todayDate}T12:00:00Z`).toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    timeZone: "UTC",
+                  })}{" "}
+                  ·{" "}
                   {data.today.games.filter((g) => g.status === "Qualified").length} of{" "}
                   {data.today.games.length} games count towards today&apos;s standings
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab("onboarding")}
-                className="text-xs font-bold text-muted hover:text-lime self-start sm:self-end"
-              >
-                How Fatherdle works →
-              </button>
+              <div className="flex items-center gap-4 self-start sm:self-end">
+                <button
+                  type="button"
+                  onClick={() => setShareModalMode("day")}
+                  className="px-4 py-2 rounded-full border border-line text-[12px] font-bold text-text inline-flex items-center gap-2 hover:bg-surface"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share my day</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("onboarding")}
+                  className="text-xs font-bold text-muted hover:text-lime"
+                >
+                  How Fatherdle works →
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

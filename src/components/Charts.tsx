@@ -556,35 +556,64 @@ export function ActivityCalendarHeatmap({
       ? d.activePlayers
       : d.totalLeaguePoints
   );
-  const maxVal = Math.max(1, ...values);
+  const positive = values.filter((v) => v > 0);
+  const maxVal = Math.max(1, ...positive);
+  const minVal = positive.length ? Math.min(...positive) : 0;
 
+  // 0 stays the empty surface colour; the rest spreads across min..max in five lime steps
+  // so a busy-but-even group still shows a visible gradient.
+  const ALPHAS = [0.2, 0.4, 0.6, 0.8, 1];
   const getCellBg = (val: number) => {
     if (val <= 0) return "#2A2A27";
-    const ratio = val / maxVal;
-    if (ratio <= 0.25) return "rgba(230, 235, 94, 0.28)";
-    if (ratio <= 0.5) return "rgba(230, 235, 94, 0.5)";
-    if (ratio <= 0.75) return "rgba(230, 235, 94, 0.75)";
-    return "#E6EB5E";
+    const span = maxVal - minVal;
+    const step = span === 0 ? 4 : Math.min(4, Math.floor(((val - minVal) / span) * 5));
+    return `rgba(230, 235, 94, ${ALPHAS[step]})`;
   };
 
+  // Align to Monday-first weekday columns.
+  const firstDow = days.length ? (new Date(`${days[0].date}T12:00:00Z`).getUTCDay() + 6) % 7 : 0;
+
   return (
-    <div className="grid grid-cols-7 sm:grid-cols-10 gap-[6px]">
-      {days.map((day, idx) => {
-        const val = values[idx];
-        const isSelected = day.date === selectedDate;
-        return (
-          <button
-            key={day.date}
-            type="button"
-            onClick={() => onSelectDate(day.date)}
-            style={{ backgroundColor: getCellBg(val) }}
-            className={`w-[22px] h-[22px] rounded-[5px] transition-transform hover:scale-110 ${
-              isSelected ? "ring-2 ring-text ring-offset-2 ring-offset-surface" : ""
-            }`}
-            title={`${day.label}: ${val} ${metric}`}
+    <div className="w-fit">
+      <div className="grid grid-cols-7 gap-[6px] mb-1.5">
+        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+          <span key={i} className="w-[30px] text-center text-[10px] font-semibold text-muted">
+            {d}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-[6px]">
+        {Array.from({ length: firstDow }).map((_, i) => (
+          <span key={`pad-${i}`} className="w-[30px] h-[30px]" />
+        ))}
+        {days.map((day, idx) => {
+          const val = values[idx];
+          const isSelected = day.date === selectedDate;
+          return (
+            <button
+              key={day.date}
+              type="button"
+              onClick={() => onSelectDate(day.date)}
+              style={{ backgroundColor: getCellBg(val) }}
+              className={`w-[30px] h-[30px] rounded-[7px] transition-transform hover:scale-110 ${
+                isSelected ? "ring-2 ring-text ring-offset-2 ring-offset-surface" : ""
+              }`}
+              title={`${day.label}: ${val} ${metric}`}
+            />
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-1.5 mt-3 text-[10px] text-muted font-semibold">
+        <span>Less</span>
+        {ALPHAS.map((a) => (
+          <span
+            key={a}
+            style={{ backgroundColor: `rgba(230, 235, 94, ${a})` }}
+            className="w-3 h-3 rounded-[3px]"
           />
-        );
-      })}
+        ))}
+        <span>More</span>
+      </div>
     </div>
   );
 }
