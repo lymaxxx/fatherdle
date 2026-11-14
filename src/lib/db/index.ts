@@ -62,34 +62,120 @@ let cache: LeagueData | null = null;
 let loading: Promise<LeagueData> | null = null;
 let writeChain: Promise<void> = Promise.resolve();
 
-/** Netlify configures Blobs automatically; the env vars are a manual fallback. */
 /**
- * Next.js wraps the global fetch with its own caching layer; Blobs requests made through it were
- * hanging on Netlify, so hand the Blobs client the original, unwrapped fetch.
+ * Next.js wraps the global fetch with its own caching layer; hand the Blobs client the original,
+ * unwrapped fetch so requests behave like plain Node fetches.
  */
 function rawFetch(): typeof fetch {
   const f = globalThis.fetch as typeof fetch & { _nextOriginalFetch?: typeof fetch };
   return f._nextOriginalFetch ?? f;
 }
 
-/** Netlify configures Blobs automatically; the env vars are a manual fallback. */
-function blobStore() {
-  const siteID = process.env.FATHERDLE_BLOBS_SITE_ID;
-  const token = process.env.FATHERDLE_BLOBS_TOKEN;
-  return siteID && token
-    ? getStore({ name: BLOB_STORE, siteID, token, fetch: rawFetch() })
-    : getStore({ name: BLOB_STORE, fetch: rawFetch() });
+interface BlobsContext {
+  apiURL?: string;
+  edgeURL?: string;
+  uncachedEdgeURL?: string;
+  primaryRegion?: string;
+  siteID?: string;
+  token?: string;
+  deployID?: string;
 }
 
-/** What the server can see about its Blobs setup, for /api/health. */
+function blobsContext(): BlobsContext {
+  const raw =
+    (globalThis as { netlifyBlobsContext?: string }).netlifyBlobsContext ||
+    process.env.NETLIFY_BLOBS_CONTEXT;
+  if (!raw) return {};
+  try {
+    return JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as BlobsContext;
+  } catch {
+    return {};
+  }
+}
+
+type StoreRoute = { label: string; open: () => ReturnType<typeof getStore>; timeoutMs: number };
+
+/**
+ * Ways of reaching the store, tried in order. Manual credentials win if set; otherwise the
+ * automatic edge route, then the Netlify API using the same automatic credentials.
+ */
+function storeRoutes(): StoreRoute[] {
+  const siteID = process.env.FATHERDLE_BLOBS_SITE_ID;
+  const token = process.env.FATHERDLE_BLOBS_TOKEN;
+  if (siteID && token) {
+    return [
+      {
+        label: "manual credentials",
+        open: () => getStore({ name: BLOB_STORE, siteID, token, fetch: rawFetch() }),
+        timeoutMs: 7000,
+      },
+    ];
+  }
+  const ctx = blobsContext();
+  const routes: StoreRoute[] = [
+    { label: "edge", open: () => getStore({ name: BLOB_STORE, fetch: rawFetch() }), timeoutMs: 3000 },
+  ];
+  if (ctx.siteID && ctx.token) {
+    routes.push({
+      label: "api",
+      open: () =>
+        getStore({
+          name: BLOB_STORE,
+          siteID: ctx.siteID!,
+          token: ctx.token!,
+          apiURL: ctx.apiURL,
+          fetch: rawFetch(),
+        }),
+      timeoutMs: 4000,
+    });
+  }
+  return routes;
+}
+
+let workingRoute: StoreRoute | null = null;
+
+/** Runs a Blobs call on the route that last worked, or tries each route until one does. */
+async function onStore<T>(
+  what: string,
+  fn: (store: ReturnType<typeof getStore>) => Promise<T>
+): Promise<T> {
+  const routes = workingRoute ? [workingRoute] : storeRoutes();
+  const errors: string[] = [];
+  for (const route of routes) {
+    try {
+      const result = await withTimeout(fn(route.open()), route.timeoutMs, `Netlify Blobs ${what} (${route.label})`);
+      workingRoute = route;
+      return result;
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  workingRoute = null;
+  throw new Error(errors.join("; "));
+}
+
+/** What the server can see about its Blobs setup, for /api/health (no secrets). */
 export function blobDiagnostics() {
   const f = globalThis.fetch as typeof fetch & { _nextOriginalFetch?: unknown; __nextPatched?: unknown };
+  const ctx = blobsContext();
+  const host = (u?: string) => {
+    try {
+      return u ? new URL(u).host : null;
+    } catch {
+      return "invalid";
+    }
+  };
   return {
     envContext: Boolean(process.env.NETLIFY_BLOBS_CONTEXT),
     globalContext: Boolean((globalThis as { netlifyBlobsContext?: unknown }).netlifyBlobsContext),
+    contextKeys: Object.keys(ctx),
+    apiHost: host(ctx.apiURL),
+    edgeHost: host(ctx.edgeURL),
+    uncachedEdgeHost: host(ctx.uncachedEdgeURL),
+    primaryRegion: ctx.primaryRegion ?? null,
     manualCredentials: Boolean(process.env.FATHERDLE_BLOBS_SITE_ID && process.env.FATHERDLE_BLOBS_TOKEN),
-    fetchPatchedByNext: Boolean(f.__nextPatched),
     usingOriginalFetch: Boolean(f._nextOriginalFetch),
+    workingRoute: workingRoute?.label ?? null,
   };
 }
 
@@ -112,23 +198,7 @@ function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T>
 
 async function readPersisted(): Promise<LeagueData | null> {
   if (onNetlify()) {
-    const store = blobStore();
-    let value: unknown;
-    try {
-      // Strongly consistent read first so a second function instance sees fresh writes...
-      value = await withTimeout(
-        store.get(BLOB_KEY, { type: "json", consistency: "strong" }),
-        2500,
-        "Netlify Blobs strong read"
-      );
-    } catch {
-      // ...but if that path is unavailable here, fall back to the default read.
-      value = await withTimeout(
-        store.get(BLOB_KEY, { type: "json" }),
-        4000,
-        "Netlify Blobs read"
-      );
-    }
+    const value = await onStore("read", (store) => store.get(BLOB_KEY, { type: "json" }));
     return (value as LeagueData | null) ?? null;
   }
   try {
@@ -140,7 +210,7 @@ async function readPersisted(): Promise<LeagueData | null> {
 
 async function writePersisted(data: LeagueData): Promise<void> {
   if (onNetlify()) {
-    await withTimeout(blobStore().setJSON(BLOB_KEY, data), 6000, "Netlify Blobs write");
+    await onStore("write", (store) => store.setJSON(BLOB_KEY, data));
     return;
   }
   fs.mkdirSync(path.dirname(LOCAL_FILE), { recursive: true });
