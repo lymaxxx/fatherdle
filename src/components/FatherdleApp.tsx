@@ -126,6 +126,11 @@ export function FatherdleApp({
   // Modals
   const [isPasteOpen, setIsPasteOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinMode, setJoinMode] = useState<"both" | "existing" | "new">("both");
+  const openJoin = (mode: "both" | "existing" | "new") => {
+    setJoinMode(mode);
+    setIsJoinModalOpen(true);
+  };
   const [newPlayerName, setNewPlayerName] = useState("");
   const [shareModalMode, setShareModalMode] = useState<"league" | "day" | null>(null);
 
@@ -141,7 +146,11 @@ export function FatherdleApp({
         params.set("start", customStart);
         params.set("end", customEnd);
       }
-      const res = await fetch(`/api/league?${params.toString()}`);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      const res = await fetch(`/api/league?${params.toString()}`, { signal: ctrl.signal }).finally(
+        () => clearTimeout(timer)
+      );
       const json = (await res.json()) as LeagueApiResponse & { error?: string };
       if (!res.ok || json.error || !json.players) {
         throw new Error(json.error || `Server returned ${res.status}`);
@@ -153,7 +162,13 @@ export function FatherdleApp({
       }
     } catch (e) {
       console.error("Failed to fetch league data:", e);
-      setLoadError(e instanceof Error ? e.message : "Could not load the league.");
+      setLoadError(
+        e instanceof Error && e.name === "AbortError"
+          ? "The server took too long to respond."
+          : e instanceof Error
+          ? e.message
+          : "Could not load the league."
+      );
     } finally {
       setLoading(false);
     }
@@ -417,7 +432,7 @@ export function FatherdleApp({
                   value={currentUserId}
                   onChange={(e) => {
                     if (e.target.value === "__add") {
-                      setIsJoinModalOpen(true);
+                      openJoin("new");
                       return;
                     }
                     chooseIdentity(e.target.value);
@@ -437,7 +452,7 @@ export function FatherdleApp({
             ) : (
               <button
                 type="button"
-                onClick={() => setIsJoinModalOpen(true)}
+                onClick={() => openJoin("both")}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-line text-[12px] font-bold text-text hover:bg-surface"
               >
                 <UserPlus className="w-3.5 h-3.5" />
@@ -463,7 +478,7 @@ export function FatherdleApp({
             1. ONBOARDING / JOIN VIEW (Screen 1)
            ========================================================= */}
         {activeTab === "onboarding" && (
-          <div className="max-w-md mx-auto py-6 space-y-7">
+          <div className="max-w-md mx-auto pt-6 pb-44 md:pb-6 space-y-7">
             <h1 className="text-[56px] font-extrabold tracking-[-2.5px] leading-[0.95] text-text">
               Daily games.
               <br />
@@ -507,12 +522,22 @@ export function FatherdleApp({
             <div className="space-y-3 pt-4">
               <button
                 type="button"
-                onClick={() => setIsJoinModalOpen(true)}
+                onClick={() => openJoin("new")}
                 className="w-full h-[60px] rounded-full bg-lime text-[#121212] text-[16px] font-extrabold flex items-center justify-center gap-2"
               >
                 <UserPlus className="w-5 h-5" />
-                <span>Join the league</span>
+                <span>Add a new player</span>
               </button>
+              {data.players.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => openJoin("existing")}
+                  className="w-full h-[60px] rounded-full border border-line text-text text-[16px] font-bold flex items-center justify-center gap-2 hover:bg-surface"
+                >
+                  <Users className="w-5 h-5" />
+                  <span>Choose an existing player</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setIsPasteOpen(true)}
@@ -1932,9 +1957,10 @@ export function FatherdleApp({
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {joinMode !== "new" && (
             <div>
               <p className="text-xs font-bold text-muted uppercase tracking-wider mb-1.5">
-                Already in the league?
+                {data.players.length ? "Choose your name" : "No players yet"}
               </p>
               <div className="flex flex-wrap gap-2">
                 {data.players.map((p) => (
@@ -1954,7 +1980,11 @@ export function FatherdleApp({
                 ))}
               </div>
             </div>
-            <p className="text-xs font-bold text-muted uppercase tracking-wider">Or join as new</p>
+            )}
+            {joinMode === "both" && (
+              <p className="text-xs font-bold text-muted uppercase tracking-wider">Or join as new</p>
+            )}
+            {joinMode !== "existing" && (
             <form onSubmit={handleJoinSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">
@@ -1985,6 +2015,7 @@ export function FatherdleApp({
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}

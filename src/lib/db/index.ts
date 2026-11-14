@@ -52,6 +52,10 @@ function onNetlify(): boolean {
   );
 }
 
+export function storageKind(): "netlify-blobs" | "local-file" {
+  return onNetlify() ? "netlify-blobs" : "local-file";
+}
+
 let cache: LeagueData | null = null;
 let loading: Promise<LeagueData> | null = null;
 let writeChain: Promise<void> = Promise.resolve();
