@@ -247,6 +247,102 @@ export function leagueFinalOps(week: LeagueWeek): Op[] {
   return ops;
 }
 
+export interface PlayerStatsInput {
+  name: string;
+  color: string;
+  rank: number;
+  points: number;
+  qualifiedGames: number;
+  firstPlaces: number;
+  averagePlacement: number | null;
+  periodLabel: string;
+  games: Array<{ name: string; color: string; points: number }>;
+}
+
+const ordinalOf = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+/** A player's statistics for a period: position, points, and points earned in each game. */
+export function playerStatsOps(p: PlayerStatsInput): Op[] {
+  const size = Math.min(176, Math.floor(880 / Math.max(1, p.name.length * 0.6)));
+  const ops: Op[] = [
+    { t: "rect", x: 0, y: 0, w: CARD_W, h: CARD_H, fill: INK },
+    ...header(p.periodLabel.toUpperCase()),
+    { t: "rect", x: 56, y: 110, w: 968, h: 420, fill: LIME, r: 48 },
+    {
+      t: "text",
+      x: 96,
+      top: 110 + 52 + (176 - size) / 2,
+      lh: size,
+      text: p.name,
+      size,
+      weight: 800,
+      color: INK,
+      ls: Math.round((-7 * size) / 176),
+    },
+  ];
+  const metrics: Array<[string, string, number]> = [
+    [ordinalOf(p.rank), "League position", 100],
+    [String(p.points), "Points", 386],
+    [String(p.firstPlaces), p.firstPlaces === 1 ? "First place" : "First places", 676],
+  ];
+  for (const [v, label, x] of metrics) {
+    ops.push({ t: "text", x, top: 110 + 268, lh: 96, text: v, size: 96, weight: 400, color: INK, serif: true, ls: -3 });
+    ops.push({ t: "text", x: x + 4, top: 110 + 366, lh: 28, text: label, size: 20, weight: 600, color: INK });
+  }
+
+  const rows = p.games.slice(0, 9);
+  const pitch = Math.min(76, Math.floor(690 / Math.max(1, rows.length)));
+  const rowH = pitch - 8;
+  const max = Math.max(1, ...rows.map((g) => g.points));
+  rows.forEach((g, i) => {
+    const y = 556 + i * pitch;
+    ops.push({ t: "rect", x: 56, y, w: 968, h: rowH, fill: g.color, r: 16 });
+    // a darker strip shows each game's share of the best game
+    ops.push({
+      t: "rect",
+      x: 56,
+      y: y + rowH - 6,
+      w: Math.max(24, Math.round((g.points / max) * 968)),
+      h: 6,
+      fill: "rgba(18,18,18,0.35)",
+      r: [0, 3, 0, 16],
+    });
+    ops.push({ t: "text", x: 80, top: y + (rowH - 34) / 2, lh: 34, text: g.name, size: 26, weight: 800, color: INK });
+    ops.push({
+      t: "text",
+      x: 1000 - 200,
+      top: y + (rowH - 50) / 2,
+      lh: 50,
+      text: `${g.points}`,
+      size: 50,
+      weight: 400,
+      color: INK,
+      serif: true,
+      align: "right",
+      w: 200,
+    });
+  });
+  if (rows.length === 0) {
+    ops.push({ t: "text", x: 56, top: 580, lh: 32, text: "No points yet this period.", size: 24, weight: 500, color: MUTED });
+  }
+  const avg = p.averagePlacement ? `average place ${p.averagePlacement.toFixed(1)} · ` : "";
+  ops.push({
+    t: "text",
+    x: 56,
+    top: 1266,
+    lh: 32,
+    text: `${avg}${p.qualifiedGames} games counted · points earned in each game`,
+    size: 22,
+    weight: 500,
+    color: MUTED,
+  });
+  return ops;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Canvas renderer
 // ---------------------------------------------------------------------------------------------

@@ -148,7 +148,7 @@ export function FatherdleApp({
   const [newPlayerName, setNewPlayerName] = useState("");
   const [shareModalMode, setShareModalMode] = useState<"league" | "final" | "day" | "player" | null>(null);
   const [shareWeek, setShareWeek] = useState<LeagueWeek | null>(null);
-  const [todayView, setTodayView] = useState<"today" | "leagues">("today");
+  const [todayView, setTodayView] = useState<"today" | "week" | "leagues">("today");
   const [feedFilter, setFeedFilter] = useState<GameSlug | "all">("all");
   const [feedLimit, setFeedLimit] = useState(20);
   const [dismissedBanner, setDismissedBanner] = useState("");
@@ -478,7 +478,7 @@ export function FatherdleApp({
           <nav className="hidden md:flex items-center gap-7">
             {(
               [
-                { id: "today", label: "Today" },
+                { id: "today", label: "League" },
                 { id: "feed", label: "Feed" },
                 { id: "statistics", label: "Statistics" },
                 { id: "games", label: "Games" },
@@ -710,6 +710,7 @@ export function FatherdleApp({
               {(
                 [
                   ["today", "Today"],
+                  ["week", "This week"],
                   ["leagues", "Previous leagues"],
                 ] as const
               ).map(([id, label]) => (
@@ -717,11 +718,17 @@ export function FatherdleApp({
                   key={id}
                   type="button"
                   onClick={() => setTodayView(id)}
-                  className={`flex-1 md:flex-none px-5 py-2 rounded-full text-[14px] font-bold ${
+                  className={`flex-1 md:flex-none px-3 md:px-5 py-2 rounded-full text-[13px] md:text-[14px] font-bold whitespace-nowrap ${
                     todayView === id ? "bg-text text-[#121212]" : "text-muted"
                   }`}
                 >
-                  {label}
+                  {label === "Previous leagues" ? (
+                    <>
+                      Previous<span className="hidden md:inline"> leagues</span>
+                    </>
+                  ) : (
+                    label
+                  )}
                 </button>
               ))}
             </div>
@@ -747,7 +754,24 @@ export function FatherdleApp({
               firstLeagueEnds={firstLeagueEnds}
             />
           );
-          const standings = data.today.standings;
+          const weekView = todayView === "week";
+          const standings = weekView
+            ? data.leagues.current.standings.flatMap((r) => {
+                const player = data.players.find((p) => p.id === r.playerId);
+                return player
+                  ? [
+                      {
+                        player,
+                        rank: r.rank,
+                        totalPoints: r.points,
+                        gamesPlayed: r.gamesPlayed,
+                        qualifiedGamesPlayed: r.qualifiedGames,
+                        firstPlaces: r.firstPlaces,
+                      } as unknown as (typeof data.today.standings)[number],
+                    ]
+                  : [];
+              })
+            : data.today.standings;
           const maxPts = Math.max(1, ...standings.map((r) => r.totalPoints));
           const me = data.players.find((p) => p.id === currentUserId);
           const openGame = (slug: GameSlug) => {
@@ -759,7 +783,35 @@ export function FatherdleApp({
             setActiveTab("players");
           };
           const submittedLabel = (row: (typeof standings)[number]) =>
-            row.gamesPlayed > 0 ? `${row.gamesPlayed} of ${totalGames} submitted` : "Not submitted";
+            weekView
+              ? row.gamesPlayed > 0
+                ? `${row.gamesPlayed} games · ${row.qualifiedGamesPlayed} counted`
+                : "Nothing submitted"
+              : row.gamesPlayed > 0
+              ? `${row.gamesPlayed} of ${totalGames} submitted`
+              : "Not submitted";
+          const wk = data.leagues.current;
+          const subtitle = weekView
+            ? `${wk.label} · Day ${wk.daysElapsed} of 7`
+            : `${dateLabel} · ${qualifiedCount} of ${totalGames} games count`;
+          const shareHere = () => {
+            if (weekView) setShareModalMode("league");
+            else setShareModalMode("day");
+          };
+          const weekTiles = (
+            <div className="grid grid-cols-3 gap-2.5 md:gap-3.5">
+              {[
+                [`${wk.daysPlayed} of 7`, "days played"],
+                [String(wk.gamesCounted), "games counted"],
+                [String(wk.leadChanges), wk.leadChanges === 1 ? "lead change" : "lead changes"],
+              ].map(([v, l]) => (
+                <div key={l} className="bg-surface rounded-2xl md:rounded-[18px] p-4 md:p-6">
+                  <div className="font-serif text-[36px] md:text-[64px] leading-none">{v}</div>
+                  <div className="text-[12px] md:text-[14px] text-muted mt-1.5">{l}</div>
+                </div>
+              ))}
+            </div>
+          );
           const statusChip = (status: string, small = false) => (
             <span
               className={`rounded-full font-bold whitespace-nowrap ${
@@ -802,22 +854,22 @@ export function FatherdleApp({
               <div className="md:hidden space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className="text-[34px] font-extrabold tracking-[-1.2px] leading-none">
-                      Today&apos;s league
+                    <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
+                      League
                     </h1>
-                    <p className="text-[14px] text-muted mt-1">
-                      {dateLabel} · {qualifiedCount} of {totalGames} games count
-                    </p>
+                    <p className="text-[14px] text-muted mt-1">{subtitle}</p>
                   </div>
                   <div className="flex items-center gap-2.5">
+                    {todayView !== "leagues" && (
                     <button
                       type="button"
-                      aria-label="Share my day"
-                      onClick={() => setShareModalMode("day")}
+                      aria-label={weekView ? "Share this week" : "Share my day"}
+                      onClick={shareHere}
                       className="w-11 h-11 rounded-full bg-surface2 flex items-center justify-center"
                     >
                       <Share2 className="w-4 h-4" />
                     </button>
+                    )}
                     {me && (
                       <button
                         type="button"
@@ -837,7 +889,7 @@ export function FatherdleApp({
                   leaguesView
                 ) : (
                   <>
-                {banner}
+                {todayView === "today" && banner}
                 <div>
                   {standings.map((row) => {
                     const isMe = row.player.id === currentUserId;
@@ -892,6 +944,7 @@ export function FatherdleApp({
                   </div>
                 </div>
 
+                {weekView ? weekTiles : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h2 className="text-[24px] font-extrabold">Games</h2>
@@ -934,6 +987,7 @@ export function FatherdleApp({
                     )}
                   </div>
                 </div>
+                )}
                   </>
                 )}
               </div>
@@ -942,16 +996,24 @@ export function FatherdleApp({
               <div className="hidden md:block space-y-7">
                 <div className="flex items-center justify-between gap-6">
                   <div className="space-y-2">
-                    <h1 className="text-[64px] font-extrabold tracking-[-2.5px] leading-[64px]">
-                      Today&apos;s league
+                    <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
+                      League
                     </h1>
-                    <p className="text-[16px] text-muted">
-                      {dateLabel} · {qualifiedCount} of {totalGames} games count
-                    </p>
+                    <p className="text-[16px] text-muted">{subtitle}</p>
                     <div className="pt-2">{toggle}</div>
                   </div>
-                  {todayView === "today" && (
+                  {todayView !== "leagues" && (
                   <div className="flex items-center gap-4">
+                    {weekView ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsPasteOpen(true)}
+                        className="h-12 px-6 rounded-full bg-lime text-[#121212] text-[15px] font-extrabold inline-flex items-center gap-2"
+                      >
+                        <ClipboardPaste className="w-4 h-4" />
+                        Paste result
+                      </button>
+                    ) : (
                     <div className="bg-lime text-[#121212] rounded-[32px] flex items-center gap-5 py-3 pl-7 pr-3">
                       <span className="font-serif text-[56px] leading-[56px] tracking-[-2px] whitespace-nowrap">
                         {mySubmitted} of {totalGames}
@@ -971,13 +1033,14 @@ export function FatherdleApp({
                         Paste result
                       </button>
                     </div>
+                    )}
                     <button
                       type="button"
-                      onClick={() => setShareModalMode("day")}
+                      onClick={shareHere}
                       className="h-12 px-[22px] rounded-full border-[1.5px] border-line text-[14px] font-bold inline-flex items-center gap-2 hover:bg-surface"
                     >
                       <Share2 className="w-4 h-4" />
-                      Share my day
+                      {weekView ? "Share this week" : "Share my day"}
                     </button>
                   </div>
                   )}
@@ -987,7 +1050,7 @@ export function FatherdleApp({
                   leaguesView
                 ) : (
                   <>
-                {banner}
+                {todayView === "today" && banner}
                 <div className="space-y-2.5">
                   {standings.map((row) => {
                     const isMe = row.player.id === currentUserId;
@@ -1050,6 +1113,7 @@ export function FatherdleApp({
                   </span>
                 </div>
 
+                {weekView ? weekTiles : (
                 <div className="space-y-3">
                   <div className="flex items-baseline gap-3">
                     <h2 className="text-[28px] font-extrabold">Games</h2>
@@ -1098,6 +1162,7 @@ export function FatherdleApp({
                     </div>
                   </div>
                 </div>
+                )}
                   </>
                 )}
               </div>
@@ -1112,7 +1177,7 @@ export function FatherdleApp({
           <div className="space-y-7">
             {/* Title & Period Selector */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h1 className="text-[44px] sm:text-[52px] font-extrabold tracking-[-1.8px] leading-none">
+              <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
                 Statistics
               </h1>
               {renderPeriodSelector()}
@@ -1124,7 +1189,7 @@ export function FatherdleApp({
               allStandings={data.stats.standings}
               period={data.period}
               series={data.stats.timeSeries.series}
-              onShare={() => setShareModalMode("league")}
+              onShare={() => setShareModalMode("player")}
             />
 
             {/* Row 1: Standings + Points Over Time */}
@@ -1890,6 +1955,8 @@ export function FatherdleApp({
            ========================================================= */}
         {activeTab === "games" && (
           <div className="space-y-7">
+            <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">Games</h1>
+
             {/* Game Selector Strip */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
               {data.games.map((g) => {
@@ -2285,7 +2352,7 @@ export function FatherdleApp({
 
         <nav className="bg-surface border border-line/80 rounded-full p-1 grid grid-cols-5 gap-1">
           {[
-            { id: "today" as NavTab, label: "Today", icon: Trophy },
+            { id: "today" as NavTab, label: "League", icon: Trophy },
             { id: "feed" as NavTab, label: "Feed", icon: Activity },
             { id: "statistics" as NavTab, label: "Stats", icon: BarChart3 },
             { id: "games" as NavTab, label: "Games", icon: Gamepad2 },

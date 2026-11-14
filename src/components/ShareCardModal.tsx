@@ -14,6 +14,7 @@ import {
   drawOps,
   leagueCurrentOps,
   leagueFinalOps,
+  playerStatsOps,
 } from "@/lib/share-scene";
 import type { LeagueWeek } from "@/lib/analytics/feed";
 
@@ -102,6 +103,22 @@ export function ShareCardModal({
       ? leagueFinalOps(week)
       : week && mode === "league"
       ? leagueCurrentOps(week)
+      : mode === "player"
+      ? playerStatsOps({
+          name: playerRow.player.name,
+          color: playerRow.player.color,
+          rank: playerRow.rank,
+          points: playerRow.totalPoints,
+          qualifiedGames: playerRow.qualifiedGamesPlayed,
+          firstPlaces: playerRow.firstPlaces,
+          averagePlacement: playerRow.averagePlacement,
+          periodLabel: period.label,
+          games: gamePointsEntries.map(([slug, pts]) => ({
+            name: GAMES[slug].name,
+            color: GAMES[slug].color,
+            points: pts,
+          })),
+        })
       : [];
 
   const handleDownloadSvgCard = async (useWebShare = false) => {
@@ -122,91 +139,8 @@ export function ShareCardModal({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    if ((mode === "league" || mode === "final") && week) {
+    if (sceneOps.length > 0) {
       drawOps(ctx, sceneOps);
-    } else if (mode === "player") {
-      ctx.fillStyle = "#121212";
-      ctx.fillRect(0, 0, 1080, 1350);
-
-      // Header
-      ctx.fillStyle = "#E6EB5E";
-      ctx.beginPath();
-      ctx.arc(68, 72, 12, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#F4F1EA";
-      ctx.font = `bold 22px ${DM}`;
-      ctx.fillText(APP_WORDMARK, 94, 80);
-      ctx.textAlign = "right";
-      ctx.fillText(period.label.toUpperCase(), 1020, 80);
-      ctx.textAlign = "left";
-
-      // Lime Hero Card
-      ctx.fillStyle = "#E6EB5E";
-      ctx.beginPath();
-      ctx.roundRect(54, 120, 972, 480, 42);
-      ctx.fill();
-
-      ctx.fillStyle = "#121212";
-      ctx.font = `bold 22px ${DM}`;
-      ctx.fillText(
-        `${playerRow.player.name.toUpperCase()} · THIS ${period.preset.toUpperCase()}`,
-        104,
-        185
-      );
-
-      ctx.font = `190px ${SERIF}`;
-      ctx.fillText(formatOrdinal(playerRow.rank), 100, 390);
-      ctx.fillText(`${playerRow.totalPoints}`, 620, 390);
-
-      ctx.font = `bold 26px ${DM}`;
-      ctx.fillText("League position", 104, 480);
-      ctx.fillText(posChangeText, 104, 516);
-      ctx.fillText("Points", 620, 480);
-      ctx.fillText(pointsBehind, 620, 516);
-
-      // Standings bars
-      let y = 650;
-      allStandings.slice(0, 6).forEach((row) => {
-        const barW = Math.max(260, (row.totalPoints / maxPts) * 972);
-        ctx.fillStyle = row.player.color;
-        ctx.beginPath();
-        ctx.roundRect(54, y, barW, 56, 12);
-        ctx.fill();
-
-        ctx.fillStyle = "#121212";
-        ctx.font = `bold 24px ${DM}`;
-        const label =
-          row.player.id === playerRow.player.id
-            ? `${row.player.name} (you)`
-            : row.player.name;
-        ctx.fillText(label, 78, y + 36);
-
-        ctx.textAlign = "right";
-        ctx.font = `42px ${SERIF}`;
-        ctx.fillText(`${row.totalPoints}`, 54 + barW - 22, y + 42);
-        ctx.textAlign = "left";
-        y += 70;
-      });
-
-      // Footer stats
-      ctx.strokeStyle = "#3A3935";
-      ctx.beginPath();
-      ctx.moveTo(54, 1110);
-      ctx.lineTo(1026, 1110);
-      ctx.stroke();
-
-      ctx.fillStyle = "#F4F1EA";
-      ctx.font = `96px ${SERIF}`;
-      ctx.fillText(`${playerRow.firstPlaces}`, 54, 1225);
-      ctx.fillText(`${playerRow.qualifiedGamesPlayed}`, 340, 1225);
-      ctx.fillText(bestGameName, 620, 1225);
-
-      ctx.fillStyle = "#948F84";
-      ctx.font = `24px ${DM}`;
-      ctx.fillText("first places", 54, 1270);
-      ctx.fillText("games played", 340, 1270);
-      ctx.fillText("best game", 620, 1270);
     } else {
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#121212";
@@ -341,95 +275,7 @@ export function ShareCardModal({
           </div>
         </div>
 
-        {mode === "player" ? (
-          <div
-            ref={cardRef}
-            className="bg-bg border border-line rounded-[28px] p-6 flex flex-col justify-between aspect-[4/5] shadow-2xl"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between text-[11px] font-bold tracking-[0.14em] text-text">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-lime" />
-                <span>{APP_WORDMARK}</span>
-              </div>
-              <span>{period.label.toUpperCase()}</span>
-            </div>
-
-            {/* Lime hero */}
-            <div className="bg-lime text-[#121212] rounded-[22px] p-5 my-3">
-              <div className="text-[10px] font-extrabold tracking-[0.12em] uppercase">
-                {playerRow.player.name.toUpperCase()} · THIS {period.preset.toUpperCase()}
-              </div>
-              <div className="grid grid-cols-2 gap-3 my-2">
-                <div>
-                  <div className="font-serif text-[68px] leading-[0.9]">
-                    {formatOrdinal(playerRow.rank)}
-                  </div>
-                  <div className="text-[11px] font-bold mt-1">
-                    League position
-                    <br />
-                    {posChangeText}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-serif text-[68px] leading-[0.9]">
-                    {playerRow.totalPoints}
-                  </div>
-                  <div className="text-[11px] font-bold mt-1">
-                    Points
-                    <br />
-                    {pointsBehind}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Standings bars */}
-            <div className="space-y-1.5 my-1">
-              {allStandings.slice(0, 6).map((r) => {
-                const wPct = Math.max(28, (r.totalPoints / maxPts) * 100);
-                const isMe = r.player.id === playerRow.player.id;
-                return (
-                  <div
-                    key={r.player.id}
-                    style={{ width: `${wPct}%`, backgroundColor: r.player.color }}
-                    className="h-[30px] rounded-[6px] px-3 flex items-center justify-between text-[#121212]"
-                  >
-                    <span className="text-[12px] font-extrabold truncate">
-                      {r.player.name}
-                      {isMe ? " (you)" : ""}
-                    </span>
-                    <span className="font-serif text-[20px] leading-none">
-                      {r.totalPoints}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer */}
-            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-line/60">
-              <div>
-                <div className="font-serif text-[36px] leading-none text-text">
-                  {playerRow.firstPlaces}
-                </div>
-                <div className="text-[11px] text-muted mt-1">first places</div>
-              </div>
-              <div>
-                <div className="font-serif text-[36px] leading-none text-text">
-                  {playerRow.qualifiedGamesPlayed}
-                </div>
-                <div className="text-[11px] text-muted mt-1">games played</div>
-              </div>
-              <div>
-                <div className="font-serif text-[32px] leading-none text-sand truncate">
-                  {bestGameName}
-                </div>
-                <div className="text-[11px] text-muted mt-1">best game</div>
-              </div>
-            </div>
-          </div>
-        ) : (mode === "league" || mode === "final") && week ? (
+        {sceneOps.length > 0 ? (
           <ScaledCard>
             <SceneView ops={sceneOps} />
           </ScaledCard>

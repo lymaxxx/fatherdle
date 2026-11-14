@@ -18,6 +18,9 @@ export interface LeagueWeekRow {
   points: number;
   rank: number;
   played: boolean;
+  gamesPlayed: number;
+  qualifiedGames: number;
+  firstPlaces: number;
 }
 
 export interface LeagueWeek {
@@ -71,6 +74,9 @@ function buildWeek(
       points: r.totalPoints,
       rank: r.rank,
       played: r.gamesPlayed > 0,
+      gamesPlayed: r.gamesPlayed,
+      qualifiedGames: r.qualifiedGamesPlayed,
+      firstPlaces: r.firstPlaces,
     })),
   };
 }

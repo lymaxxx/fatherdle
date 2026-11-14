@@ -113,7 +113,7 @@ export function AdminPanel({
   if (!authed) {
     return (
       <div className="max-w-sm mx-auto py-10 space-y-5">
-        <h1 className="text-[40px] font-extrabold tracking-[-1.5px] leading-none">Admin</h1>
+        <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">Admin</h1>
         <form onSubmit={login} className="space-y-3">
           <label className="block text-xs font-bold text-muted uppercase tracking-wider">
             Password
@@ -141,7 +141,7 @@ export function AdminPanel({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-[40px] sm:text-[52px] font-extrabold tracking-[-1.8px] leading-none">
+        <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
           Admin
         </h1>
         <button
