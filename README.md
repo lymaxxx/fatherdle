@@ -41,3 +41,11 @@ use Git or the CLI.
   Pending. Points are inverse rank, ties share a place.
 - The league resets to nothing if the blob store is cleared; there is no login, so anyone with the
   link can join and submit.
+
+## Troubleshooting
+
+If the site shows "Couldn't load the league" the message underneath is the server error. If it says
+Netlify Blobs is not configured, add two environment variables in Netlify and redeploy:
+
+- `FATHERDLE_BLOBS_SITE_ID`: your site's ID (Site configuration -> General -> Site ID)
+- `FATHERDLE_BLOBS_TOKEN`: a Netlify personal access token (User settings -> Applications)

@@ -113,6 +113,7 @@ export function FatherdleApp({
 
   const [data, setData] = useState<LeagueApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Chart interactive states
   const [pointsChartMode, setPointsChartMode] = useState<"cumulative" | "daily">("cumulative");
@@ -141,13 +142,18 @@ export function FatherdleApp({
         params.set("end", customEnd);
       }
       const res = await fetch(`/api/league?${params.toString()}`);
-      const json = (await res.json()) as LeagueApiResponse;
+      const json = (await res.json()) as LeagueApiResponse & { error?: string };
+      if (!res.ok || json.error || !json.players) {
+        throw new Error(json.error || `Server returned ${res.status}`);
+      }
+      setLoadError(null);
       setData(json);
       if (visiblePlayerIds.length === 0 && json.players) {
         setVisiblePlayerIds(json.players.map((p) => p.id));
       }
     } catch (e) {
       console.error("Failed to fetch league data:", e);
+      setLoadError(e instanceof Error ? e.message : "Could not load the league.");
     } finally {
       setLoading(false);
     }
@@ -278,7 +284,27 @@ export function FatherdleApp({
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-bg text-text flex items-center justify-center p-6">
+        <div className="max-w-md space-y-4 text-center">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-3.5 h-3.5 rounded-full bg-lime" />
+            <span className="text-sm font-bold tracking-widest uppercase">{APP_WORDMARK}</span>
+          </div>
+          <p className="text-[15px] font-semibold">Couldn&apos;t load the league.</p>
+          {loadError && <p className="text-xs text-muted break-words">{loadError}</p>}
+          <button
+            type="button"
+            onClick={() => fetchLeagueData()}
+            className="px-5 py-2.5 rounded-full bg-lime text-[#121212] text-sm font-extrabold"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Period Selector Component shared by Statistics, Player, and Game pages
   const renderPeriodSelector = () => (

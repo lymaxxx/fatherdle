@@ -41,16 +41,33 @@ const LOCAL_FILE = path.join(
 );
 
 function onNetlify(): boolean {
-  return Boolean(process.env.NETLIFY || process.env.NETLIFY_BLOBS_CONTEXT);
+  // Serverless runtimes have a read-only filesystem, so anything that looks like Netlify/Lambda
+  // must use Blobs. Only plain local Node falls back to a JSON file.
+  return Boolean(
+    process.env.NETLIFY ||
+      process.env.NETLIFY_BLOBS_CONTEXT ||
+      process.env.NETLIFY_DEV ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT
+  );
 }
 
 let cache: LeagueData | null = null;
 let loading: Promise<LeagueData> | null = null;
 let writeChain: Promise<void> = Promise.resolve();
 
+/** Netlify configures Blobs automatically; the env vars are a manual fallback. */
+function blobStore() {
+  const siteID = process.env.FATHERDLE_BLOBS_SITE_ID;
+  const token = process.env.FATHERDLE_BLOBS_TOKEN;
+  return siteID && token
+    ? getStore({ name: BLOB_STORE, siteID, token, consistency: "strong" })
+    : getStore({ name: BLOB_STORE, consistency: "strong" });
+}
+
 async function readPersisted(): Promise<LeagueData | null> {
   if (onNetlify()) {
-    const store = getStore({ name: BLOB_STORE, consistency: "strong" });
+    const store = blobStore();
     return ((await store.get(BLOB_KEY, { type: "json" })) as LeagueData | null) ?? null;
   }
   try {
@@ -62,7 +79,7 @@ async function readPersisted(): Promise<LeagueData | null> {
 
 async function writePersisted(data: LeagueData): Promise<void> {
   if (onNetlify()) {
-    const store = getStore({ name: BLOB_STORE, consistency: "strong" });
+    const store = blobStore();
     await store.setJSON(BLOB_KEY, data);
     return;
   }
