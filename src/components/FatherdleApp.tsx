@@ -34,6 +34,7 @@ import {
   LeaderboardColumn,
 } from "@/lib/analytics/game-modules";
 import { APP_WORDMARK, GAMES } from "@/lib/constants";
+import { AdminPanel } from "@/components/AdminPanel";
 import {
   ActivityCalendarHeatmap,
   GameHistoryChart,
@@ -45,7 +46,7 @@ import { HighlightBlocks } from "./HighlightBlocks";
 import { PasteResultModal } from "./PasteResultModal";
 import { ShareCardModal } from "./ShareCardModal";
 
-export type NavTab = "today" | "statistics" | "games" | "players" | "onboarding";
+export type NavTab = "today" | "statistics" | "games" | "players" | "onboarding" | "admin";
 
 interface LeagueApiResponse {
   todayDate: string;
@@ -116,6 +117,7 @@ export function FatherdleApp({
   const [gameDate, setGameDate] = useState(""); // "" = today
   const [selectedGameSlug, setSelectedGameSlug] = useState<GameSlug>(initialGameSlug ?? "maptap");
   const [hasJoined, setHasJoined] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [identityChecked, setIdentityChecked] = useState(false);
 
   const [data, setData] = useState<LeagueApiResponse | null>(null);
@@ -192,6 +194,31 @@ export function FatherdleApp({
     fetchLeagueData();
   }, [fetchLeagueData]);
 
+  // Is this browser logged in as admin?
+  useEffect(() => {
+    fetch("/api/admin")
+      .then((r) => r.json())
+      .then((j) => setIsAdmin(Boolean(j.authed)))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
+  // Every page starts at the top.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [activeTab]);
+
+  // If the admin removed or merged the player this browser was using, ask them to pick again.
+  useEffect(() => {
+    if (!data || !identityChecked || !currentUserId) return;
+    if (!data.players.some((p) => p.id === currentUserId)) {
+      window.localStorage.removeItem(IDENTITY_KEY);
+      setCurrentUserId("");
+      setViewedPlayerId("");
+      setHasJoined(false);
+      if (activeTab !== "admin") setActiveTab("onboarding");
+    }
+  }, [data, identityChecked, currentUserId, activeTab]);
+
   // Fill date and comparison defaults from the server's idea of "today".
   useEffect(() => {
     if (!data) return;
@@ -225,7 +252,8 @@ export function FatherdleApp({
   // Keep the URL in step with the Games tab (/games/[slug]).
   useEffect(() => {
     if (!identityChecked) return;
-    const path = activeTab === "games" ? `/games/${selectedGameSlug}` : "/";
+    const path =
+      activeTab === "games" ? `/games/${selectedGameSlug}` : activeTab === "admin" ? "/admin" : "/";
     if (window.location.pathname !== path) window.history.replaceState(null, "", path);
   }, [activeTab, selectedGameSlug, identityChecked]);
 
@@ -281,6 +309,9 @@ export function FatherdleApp({
     if (!data) return null;
     return data.players.find((p) => p.id === currentUserId) || data.players[0] || null;
   }, [data, currentUserId]);
+
+  const canAddPlayers = isAdmin || (data?.players.length ?? 0) === 0;
+  const showAdminLink = isAdmin || currentUserPlayer?.slug === "maksim";
 
   const currentUserStandingRow = useMemo(() => {
     if (!data) return null;
@@ -458,9 +489,11 @@ export function FatherdleApp({
                       {p.name} (you)
                     </option>
                   ))}
-                  <option value="__add" className="bg-surface text-text">
-                    + Add player…
-                  </option>
+                  {isAdmin && (
+                    <option value="__add" className="bg-surface text-text">
+                      + Add player…
+                    </option>
+                  )}
                 </select>
               </div>
             ) : (
@@ -471,6 +504,20 @@ export function FatherdleApp({
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>Join the league</span>
+              </button>
+            )}
+
+            {showAdminLink && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("admin")}
+                className={`px-3.5 py-2 rounded-full border text-[12px] font-bold ${
+                  activeTab === "admin"
+                    ? "border-lime text-lime"
+                    : "border-line text-muted hover:text-text hover:bg-surface"
+                }`}
+              >
+                Admin
               </button>
             )}
 
@@ -534,22 +581,28 @@ export function FatherdleApp({
             </div>
 
             <div className="space-y-3 pt-4">
-              <button
-                type="button"
-                onClick={() => openJoin("new")}
-                className="w-full h-[60px] rounded-full bg-lime text-[#121212] text-[16px] font-extrabold flex items-center justify-center gap-2"
-              >
-                <UserPlus className="w-5 h-5" />
-                <span>Add a new player</span>
-              </button>
               {data.players.length > 0 && (
                 <button
                   type="button"
                   onClick={() => openJoin("existing")}
-                  className="w-full h-[60px] rounded-full border border-line text-text text-[16px] font-bold flex items-center justify-center gap-2 hover:bg-surface"
+                  className="w-full h-[60px] rounded-full bg-lime text-[#121212] text-[16px] font-extrabold flex items-center justify-center gap-2"
                 >
                   <Users className="w-5 h-5" />
                   <span>Choose an existing player</span>
+                </button>
+              )}
+              {canAddPlayers && (
+                <button
+                  type="button"
+                  onClick={() => openJoin("new")}
+                  className={
+                    data.players.length > 0
+                      ? "w-full h-[60px] rounded-full border border-line text-text text-[16px] font-bold flex items-center justify-center gap-2 hover:bg-surface"
+                      : "w-full h-[60px] rounded-full bg-lime text-[#121212] text-[16px] font-extrabold flex items-center justify-center gap-2"
+                  }
+                >
+                  <UserPlus className="w-5 h-5" />
+                  <span>Add a new player</span>
                 </button>
               )}
               <button
@@ -567,6 +620,10 @@ export function FatherdleApp({
         {/* =========================================================
             2. TODAY'S LEAGUE VIEW (Screen 2)
            ========================================================= */}
+        {activeTab === "admin" && (
+          <AdminPanel onChanged={fetchLeagueData} onAuthChange={setIsAdmin} />
+        )}
+
         {activeTab === "today" && (() => {
           const totalGames = data.today.games.length;
           const mySubmitted = data.today.games.filter((g) =>
@@ -2153,7 +2210,7 @@ export function FatherdleApp({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            {joinMode !== "new" && (
+            {(joinMode !== "new" || !canAddPlayers) && (
             <div>
               <p className="text-xs font-bold text-muted uppercase tracking-wider mb-1.5">
                 {data.players.length ? "Choose your name" : "No players yet"}
@@ -2177,10 +2234,10 @@ export function FatherdleApp({
               </div>
             </div>
             )}
-            {joinMode === "both" && (
+            {joinMode === "both" && canAddPlayers && (
               <p className="text-xs font-bold text-muted uppercase tracking-wider">Or join as new</p>
             )}
-            {joinMode !== "existing" && (
+            {joinMode !== "existing" && canAddPlayers && (
             <form onSubmit={handleJoinSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ADMIN_COOKIE, isValidAdminToken } from "@/lib/admin-auth";
 import {
   createPlayer,
   getAllPlayers,
@@ -195,7 +196,16 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    const isAdmin = isValidAdminToken(req.cookies.get(ADMIN_COOKIE)?.value);
+
     if (body.action === "join") {
+      // Only the admin can add players; the very first player can bootstrap an empty league.
+      if (!isAdmin && (await getAllPlayers()).length > 0) {
+        return NextResponse.json(
+          { error: "Only the admin can add players. Choose your name from the list." },
+          { status: 403 }
+        );
+      }
       const name = String(body.name || "").trim();
       if (!name) {
         return NextResponse.json({ error: "Name is required." }, { status: 400 });
@@ -205,6 +215,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "import-quizbois") {
+      if (!isAdmin) return NextResponse.json({ error: "Admin login required." }, { status: 401 });
       return NextResponse.json(await importQuizboisSeed());
     }
 

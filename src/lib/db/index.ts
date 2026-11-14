@@ -842,3 +842,97 @@ export async function createPlayer(
   await persist(data);
   return player;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Admin operations on the players list
+// ---------------------------------------------------------------------------------------------
+
+const slugify = (name: string) =>
+  name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+export async function playerSubmissionCounts(): Promise<Record<string, number>> {
+  const { submissions } = await load(true);
+  const counts: Record<string, number> = {};
+  for (const s of submissions) counts[s.playerId] = (counts[s.playerId] || 0) + 1;
+  return counts;
+}
+
+export async function updatePlayer(
+  id: string,
+  changes: { name?: string; color?: string }
+): Promise<Player> {
+  const data = await load(true);
+  const player = data.players.find((p) => p.id === id);
+  if (!player) throw new Error("Player not found.");
+  if (changes.name !== undefined) {
+    const name = changes.name.trim().slice(0, 24);
+    if (!name) throw new Error("Name can't be empty.");
+    const slug = slugify(name);
+    if (!slug) throw new Error("Name needs at least one letter or number.");
+    if (data.players.some((p) => p.id !== id && p.slug === slug)) {
+      throw new Error(`There is already a player called ${name}. Use Merge to combine them.`);
+    }
+    player.name = name;
+    player.slug = slug;
+    player.avatarInitials = name.slice(0, 1).toUpperCase();
+  }
+  if (changes.color !== undefined) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(changes.color)) throw new Error("Colour must look like #E6EB5E.");
+    player.color = changes.color;
+  }
+  await persist(data);
+  return player;
+}
+
+export async function removePlayer(id: string): Promise<{ removedSubmissions: number }> {
+  const data = await load(true);
+  if (!data.players.some((p) => p.id === id)) throw new Error("Player not found.");
+  const before = data.submissions.length;
+  data.submissions = data.submissions.filter((s) => s.playerId !== id);
+  data.players = data.players.filter((p) => p.id !== id);
+  await persist(data);
+  return { removedSubmissions: before - data.submissions.length };
+}
+
+/**
+ * Moves all of `sourceId`'s results to `targetId` and deletes the source player. If both players
+ * have a result for the same game on the same day, the target's result is kept.
+ */
+export async function mergePlayers(
+  sourceId: string,
+  targetId: string
+): Promise<{ moved: number; dropped: number }> {
+  if (sourceId === targetId) throw new Error("Pick two different players.");
+  const data = await load(true);
+  const source = data.players.find((p) => p.id === sourceId);
+  const target = data.players.find((p) => p.id === targetId);
+  if (!source || !target) throw new Error("Player not found.");
+
+  const taken = new Set(
+    data.submissions
+      .filter((s) => s.playerId === targetId)
+      .map((s) => `${s.leagueDate}|${s.gameSlug}`)
+  );
+  let moved = 0;
+  let dropped = 0;
+  const kept: Submission[] = [];
+  for (const s of data.submissions) {
+    if (s.playerId !== sourceId) {
+      kept.push(s);
+      continue;
+    }
+    const key = `${s.leagueDate}|${s.gameSlug}`;
+    if (taken.has(key)) {
+      dropped++;
+      continue;
+    }
+    taken.add(key);
+    moved++;
+    kept.push({ ...s, playerId: targetId, id: `sub_${s.leagueDate}_${s.gameSlug}_${targetId}` });
+  }
+  data.submissions = kept;
+  if (source.joinedAt < target.joinedAt) target.joinedAt = source.joinedAt;
+  data.players = data.players.filter((p) => p.id !== sourceId);
+  await persist(data);
+  return { moved, dropped };
+}

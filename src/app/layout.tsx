@@ -1,9 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Fatherdle — Daily games. One table.",
   description: "Daily games. One table. Statistics, standings, and multi-game score tracker.",
+};
+
+// Stop pinch/double-tap zooming from throwing the layout off on phones.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

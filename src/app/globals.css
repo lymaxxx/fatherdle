@@ -9,6 +9,18 @@
     color: #F4F1EA;
     font-family: "DM Sans", system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* No double-tap zoom, and no sideways wobble from zoomed content */
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* iOS zooms into any input smaller than 16px when focused */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 }
 
