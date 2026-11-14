@@ -3,7 +3,10 @@ import { GameConfig, GameSlug, Player } from "./types";
 export const APP_NAME = "Fatherdle";
 export const APP_WORDMARK = "FATHERDLE";
 export const TIMEZONE = "Europe/London";
-export const DEFAULT_MIN_SUBMISSIONS = 4;
+// A game counts towards the league once this many players have submitted it that day.
+// The demo league was built around 4; a real group of ~6 casual players works better with 2.
+export const DEFAULT_MIN_SUBMISSIONS =
+  process.env.FATHERDLE_DEMO === "1" || process.env.FATHERDLE_DEMO === "true" ? 4 : 2;
 
 export const TOKENS = {
   bg: "#121212",
