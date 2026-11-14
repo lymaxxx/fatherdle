@@ -1,4 +1,5 @@
 import { getStore } from "@netlify/blobs";
+import { nodeFetch } from "./node-fetch";
 import fs from "fs";
 import path from "path";
 import { DEFAULT_PLAYERS } from "../constants";
@@ -67,8 +68,8 @@ let writeChain: Promise<void> = Promise.resolve();
  * unwrapped fetch so requests behave like plain Node fetches.
  */
 function rawFetch(): typeof fetch {
-  const f = globalThis.fetch as typeof fetch & { _nextOriginalFetch?: typeof fetch };
-  return f._nextOriginalFetch ?? f;
+  // Node's own http/https client: the platform fetch hung on every Blobs request.
+  return nodeFetch as typeof fetch;
 }
 
 interface BlobsContext {
