@@ -85,6 +85,12 @@ interface LeagueApiResponse {
   };
 }
 
+function shiftIsoDate(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 function formatOrdinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
   const v = n % 100;
@@ -107,6 +113,7 @@ export function FatherdleApp({
 
   const [currentUserId, setCurrentUserId] = useState("");
   const [viewedPlayerId, setViewedPlayerId] = useState("");
+  const [gameDate, setGameDate] = useState(""); // "" = today
   const [selectedGameSlug, setSelectedGameSlug] = useState<GameSlug>(initialGameSlug ?? "maptap");
   const [hasJoined, setHasJoined] = useState(false);
   const [identityChecked, setIdentityChecked] = useState(false);
@@ -142,6 +149,7 @@ export function FatherdleApp({
         playerId: viewedPlayerId,
         gameSlug: selectedGameSlug,
       });
+      if (gameDate) params.set("gameDate", gameDate);
       if (preset === "custom" && customStart && customEnd) {
         params.set("start", customStart);
         params.set("end", customEnd);
@@ -178,7 +186,7 @@ export function FatherdleApp({
     } finally {
       setLoading(false);
     }
-  }, [preset, customStart, customEnd, viewedPlayerId, selectedGameSlug, visiblePlayerIds.length]);
+  }, [preset, customStart, customEnd, viewedPlayerId, selectedGameSlug, gameDate, visiblePlayerIds.length]);
 
   useEffect(() => {
     fetchLeagueData();
@@ -559,208 +567,358 @@ export function FatherdleApp({
         {/* =========================================================
             2. TODAY'S LEAGUE VIEW (Screen 2)
            ========================================================= */}
-        {activeTab === "today" && (
-          <div className="space-y-7">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-              <div>
-                <h1 className="text-[44px] sm:text-[52px] font-extrabold tracking-[-1.8px] leading-none">
-                  Today&apos;s league
-                </h1>
-                <p className="text-[14px] text-muted mt-2 font-medium">
-                  {new Date(`${data.todayDate}T12:00:00Z`).toLocaleDateString("en-GB", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                    timeZone: "UTC",
-                  })}{" "}
-                  ·{" "}
-                  {data.today.games.filter((g) => g.status === "Qualified").length} of{" "}
-                  {data.today.games.length} games count towards today&apos;s standings
-                </p>
-              </div>
-              <div className="flex items-center gap-4 self-start sm:self-end">
-                <button
-                  type="button"
-                  onClick={() => setShareModalMode("day")}
-                  className="px-4 py-2 rounded-full border border-line text-[12px] font-bold text-text inline-flex items-center gap-2 hover:bg-surface"
+        {activeTab === "today" && (() => {
+          const totalGames = data.today.games.length;
+          const mySubmitted = data.today.games.filter((g) =>
+            g.rankings.some((r) => r.playerId === currentUserId)
+          ).length;
+          const qualifiedCount = data.today.games.filter((g) => g.status === "Qualified").length;
+          const required = data.today.games[0]?.requiredCount ?? 3;
+          const dateLabel = new Date(`${data.todayDate}T12:00:00Z`).toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            timeZone: "UTC",
+          });
+          const standings = data.today.standings;
+          const maxPts = Math.max(1, ...standings.map((r) => r.totalPoints));
+          const me = data.players.find((p) => p.id === currentUserId);
+          const openGame = (slug: GameSlug) => {
+            setSelectedGameSlug(slug);
+            setActiveTab("games");
+          };
+          const openPlayer = (id: string) => {
+            setViewedPlayerId(id);
+            setActiveTab("players");
+          };
+          const submittedLabel = (row: (typeof standings)[number]) =>
+            row.gamesPlayed > 0 ? `${row.gamesPlayed} of ${totalGames} submitted` : "Not submitted";
+          const statusChip = (status: string, small = false) => (
+            <span
+              className={`rounded-full font-bold whitespace-nowrap ${
+                small ? "px-2 py-[3px] text-[10px]" : "px-3 py-1 text-[11px] font-extrabold"
+              } ${
+                status === "Qualified"
+                  ? "bg-lime text-[#121212]"
+                  : status === "Pending"
+                  ? "bg-surface2 text-muted"
+                  : "bg-orange/20 text-orange"
+              }`}
+            >
+              {status}
+            </span>
+          );
+          const playerChips = (dg: (typeof data.today.games)[number], size: "sm" | "md") =>
+            data.players.map((p) => {
+              const done = dg.rankings.some((r) => r.playerId === p.id);
+              return (
+                <span
+                  key={p.id}
+                  style={done ? { backgroundColor: p.color } : undefined}
+                  className={`rounded-full font-bold ${
+                    size === "sm" ? "px-[7px] py-[3px] text-[11px]" : "px-3 py-1 text-[13px]"
+                  } ${done ? "text-[#121212]" : "text-muted border-[1.5px] border-line"}`}
                 >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>Share my day</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("onboarding")}
-                  className="text-xs font-bold text-muted hover:text-lime"
-                >
-                  How Fatherdle works →
-                </button>
-              </div>
-            </div>
+                  {p.name}
+                </span>
+              );
+            });
+          const pendingNote = (
+            <>
+              Counts once {required} of {data.players.length} submit. Until then: Pending.
+            </>
+          );
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Today's Standings Table */}
-              <div className="lg:col-span-6 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
+          return (
+            <div>
+              {/* ============ MOBILE ============ */}
+              <div className="md:hidden space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Standings
-                  </h2>
-                  <span className="text-xs text-muted font-medium">
-                    Provisional until midnight
-                  </span>
+                  <div>
+                    <h1 className="text-[34px] font-extrabold tracking-[-1.2px] leading-none">
+                      Today&apos;s league
+                    </h1>
+                    <p className="text-[14px] text-muted mt-1">
+                      {dateLabel} · {qualifiedCount} of {totalGames} games count
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      aria-label="Share my day"
+                      onClick={() => setShareModalMode("day")}
+                      className="w-11 h-11 rounded-full bg-surface2 flex items-center justify-center"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                    {me && (
+                      <button
+                        type="button"
+                        aria-label="My page"
+                        onClick={() => openPlayer(me.id)}
+                        style={{ backgroundColor: me.color }}
+                        className="w-11 h-11 rounded-full text-[#121212] text-[18px] font-extrabold"
+                      >
+                        {me.avatarInitials}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="divide-y divide-line/50">
-                  {data.today.standings.map((row) => {
+                <div>
+                  {standings.map((row) => {
                     const isMe = row.player.id === currentUserId;
-                    const totalGamesCount = data.today.games.length;
+                    const played = row.gamesPlayed > 0;
                     return (
                       <div
                         key={row.player.id}
-                        className="py-3.5 flex items-center justify-between gap-3"
+                        className="flex items-center gap-3.5 h-[56px] border-b border-line last:border-b-0"
                       >
-                        <div className="flex items-center gap-3.5">
-                          <span
-                            className={`font-serif text-[28px] w-6 leading-none ${
-                              row.rank === 1 ? "text-lime" : "text-text"
-                            }`}
-                          >
-                            {row.rank}
-                          </span>
-                          <span
-                            style={{ backgroundColor: row.player.color }}
-                            className="w-2.5 h-2.5 rounded-full shrink-0"
-                          />
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setViewedPlayerId(row.player.id);
-                                setActiveTab("players");
-                              }}
-                              className="text-[16px] font-bold text-text hover:underline text-left"
-                            >
-                              {row.player.name}
-                              {isMe ? " (you)" : ""}
-                            </button>
-                            <div className="text-[12px] text-muted">
-                              {row.gamesPlayed > 0
-                                ? `${row.gamesPlayed} of ${totalGamesCount} submitted (${row.qualifiedGamesPlayed} qualified)`
-                                : "Not submitted"}
-                            </div>
+                        <span
+                          className={`font-serif text-[34px] w-[26px] leading-none ${
+                            row.rank === 1 && played ? "text-lime" : "text-text"
+                          }`}
+                        >
+                          {row.rank}
+                        </span>
+                        <span
+                          style={{ backgroundColor: played ? row.player.color : "#948F84" }}
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => openPlayer(row.player.id)}
+                          className="flex-1 min-w-0 text-left"
+                        >
+                          <div className="text-[18px] font-bold leading-tight truncate">
+                            {row.player.name}
+                            {isMe ? " (you)" : ""}
                           </div>
-                        </div>
-
-                        <div className="font-serif text-[32px] leading-none tabular-nums text-text">
-                          {row.gamesPlayed > 0 ? row.totalPoints : "–"}
-                        </div>
+                          <div className="text-[12px] text-muted">{submittedLabel(row)}</div>
+                        </button>
+                        <span
+                          className={`font-serif text-[34px] leading-none tabular-nums ${
+                            played ? "text-text" : "text-muted"
+                          }`}
+                        >
+                          {played ? row.totalPoints : "–"}
+                        </span>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Scoring explainer */}
-                <div className="bg-surface2/70 rounded-2xl p-4 flex items-start gap-3">
+                <div className="bg-surface2 rounded-[14px] p-3 flex items-start gap-2.5">
                   <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
-                  <div className="text-[12px] leading-relaxed">
+                  <div className="text-[12px] leading-4">
                     <div className="font-bold text-text">How points work</div>
                     <p className="text-muted mt-0.5">
-                      Points come from your place in each qualified game (1st earns N points
-                      for N players, down to 1 point). Players with the same result share a
-                      place and its points.
+                      Points come from your place in each qualified game. Players with the same
+                      result share a place.
                     </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[24px] font-extrabold">Games</h2>
+                    <span className="bg-lime text-[#121212] rounded-[14px] px-3 py-[5px] text-[12px] font-extrabold">
+                      You: {mySubmitted} of {totalGames}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {data.today.games.map((dg) => {
+                      const g = GAMES[dg.gameSlug];
+                      const needs = Math.max(0, dg.requiredCount - dg.submissionCount);
+                      return (
+                        <button
+                          key={dg.gameSlug}
+                          type="button"
+                          onClick={() => openGame(g.slug)}
+                          className="bg-surface rounded-2xl pt-3 px-3 pb-3.5 text-left space-y-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              style={{ backgroundColor: g.color }}
+                              className="w-1.5 h-5 rounded-[3px] shrink-0"
+                            />
+                            <span className="text-[15px] font-extrabold truncate">{g.name}</span>
+                          </div>
+                          <div className="text-[11px] text-muted">
+                            {dg.submissionCount} of {dg.totalPlayers} submitted
+                            {dg.status === "Pending" && needs > 0 ? ` · needs ${needs}` : ""}
+                          </div>
+                          <div>{statusChip(dg.status, true)}</div>
+                          <div className="flex flex-wrap gap-1">{playerChips(dg, "sm")}</div>
+                        </button>
+                      );
+                    })}
+                    {data.today.games.length % 2 === 1 && (
+                      <div className="bg-surface rounded-2xl p-3 flex items-start gap-2 text-[12px] text-muted">
+                        <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{pendingNote}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Today's Games Status List */}
-              <div className="lg:col-span-6 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">Games</h2>
-                  <span className="text-xs text-muted font-medium">
-                    You&apos;ve submitted{" "}
-                    {
-                      data.today.games.filter((g) =>
-                        g.rankings.some((r) => r.playerId === currentUserId)
-                      ).length
-                    }{" "}
-                    of {data.today.games.length}
+              {/* ============ DESKTOP ============ */}
+              <div className="hidden md:block space-y-7">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="space-y-2">
+                    <h1 className="text-[64px] font-extrabold tracking-[-2.5px] leading-[64px]">
+                      Today&apos;s league
+                    </h1>
+                    <p className="text-[16px] text-muted">
+                      {dateLabel} · {qualifiedCount} of {totalGames} games count
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-lime text-[#121212] rounded-[32px] flex items-center gap-5 py-3 pl-7 pr-3">
+                      <span className="font-serif text-[56px] leading-[56px] tracking-[-2px] whitespace-nowrap">
+                        {mySubmitted} of {totalGames}
+                      </span>
+                      <div className="text-[14px] leading-tight">
+                        <div className="font-bold">games submitted</div>
+                        <div className="opacity-70">
+                          {Math.max(0, totalGames - mySubmitted)} left to play
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsPasteOpen(true)}
+                        className="h-12 px-[22px] rounded-full bg-[#121212] text-text text-[15px] font-extrabold inline-flex items-center gap-2"
+                      >
+                        <ClipboardPaste className="w-4 h-4" />
+                        Paste result
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShareModalMode("day")}
+                      className="h-12 px-[22px] rounded-full border-[1.5px] border-line text-[14px] font-bold inline-flex items-center gap-2 hover:bg-surface"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share my day
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {standings.map((row) => {
+                    const isMe = row.player.id === currentUserId;
+                    const played = row.gamesPlayed > 0;
+                    const pct = played ? Math.max(28.6, (row.totalPoints / maxPts) * 100) : 28.6;
+                    return (
+                      <div key={row.player.id} className="flex items-center gap-6 h-[104px]">
+                        <span
+                          className={`font-serif text-[96px] leading-[96px] w-20 shrink-0 ${
+                            row.rank === 1 && played ? "text-lime" : "text-text"
+                          }`}
+                        >
+                          {row.rank}
+                        </span>
+                        <div className="flex-1 relative h-[104px]">
+                          <button
+                            type="button"
+                            onClick={() => openPlayer(row.player.id)}
+                            style={{
+                              width: `${pct}%`,
+                              ...(played ? { backgroundColor: row.player.color } : {}),
+                            }}
+                            className={`absolute left-0 top-0 h-[104px] rounded-2xl text-left px-7 ${
+                              played
+                                ? "text-[#121212]"
+                                : "text-muted border-2 border-line bg-transparent"
+                            }`}
+                          >
+                            <div className="text-[38px] font-extrabold tracking-[-1px] leading-[42px] mt-[18px]">
+                              {row.player.name}
+                            </div>
+                            <div
+                              className={`text-[16px] font-medium ${played ? "opacity-70" : ""}`}
+                            >
+                              {submittedLabel(row)}
+                            </div>
+                          </button>
+                          {isMe && played && (
+                            <span
+                              style={{ left: `calc(${pct}% - 84px)` }}
+                              className="absolute top-[38px] h-[30px] px-3.5 rounded-[15px] bg-[#121212] text-text text-[14px] font-extrabold inline-flex items-center"
+                            >
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-serif text-[104px] leading-[104px] w-[150px] text-right tabular-nums shrink-0">
+                          {played ? row.totalPoints : <span className="text-muted">–</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-surface2 rounded-[14px] px-4 py-3 flex items-center gap-2.5 text-[13px] text-muted">
+                  <Info className="w-4 h-4 shrink-0" />
+                  <span>
+                    How points work: points come from your place in each qualified game. Players
+                    with the same result share a place.
                   </span>
                 </div>
 
-                <div className="bg-surface2/70 rounded-2xl p-4 flex items-start gap-3">
-                  <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
-                  <div className="text-[12px] leading-relaxed">
-                    <div className="font-bold text-text">Qualified and Pending</div>
-                    <p className="text-muted mt-0.5">
-                      A game counts towards the league once {data.today.games[0]?.requiredCount ?? 3} of{" "}
-                      {data.players.length} players
-                      have submitted. Until then it is Pending and awards no points.
-                    </p>
+                <div className="space-y-3">
+                  <div className="flex items-baseline gap-3">
+                    <h2 className="text-[28px] font-extrabold">Games</h2>
+                    <span className="text-[14px] text-muted">
+                      Lit up = submitted · grey = waiting
+                    </span>
                   </div>
-                </div>
-
-                <div className="divide-y divide-line/50">
-                  {data.today.games.map((dg) => {
-                    const g = GAMES[dg.gameSlug];
-                    const userSub = dg.rankings.find((r) => r.playerId === currentUserId);
-                    const leaderSub = dg.rankings[0];
-
-                    return (
-                      <div
-                        key={dg.gameSlug}
-                        className="py-3.5 flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span
-                            style={{ backgroundColor: g.color }}
-                            className="w-1.5 h-9 rounded-full shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedGameSlug(g.slug);
-                                setActiveTab("games");
-                              }}
-                              className="text-[16px] font-bold text-text hover:underline flex items-center gap-2"
-                            >
-                              <span>{g.name}</span>
-                              {userSub && (
-                                <span className="text-[12px] font-semibold text-lime">
-                                  · You: {userSub.displayResult} (#{userSub.placement})
-                                </span>
-                              )}
-                            </button>
-                            <div className="text-[12px] text-muted truncate">
-                              {dg.submissionCount} of {dg.totalPlayers} submitted
-                              {leaderSub
-                                ? ` · Leader: ${leaderSub.playerName} (${leaderSub.displayResult})`
-                                : ""}
+                  <div className="grid grid-cols-3 gap-3.5">
+                    {data.today.games.map((dg) => {
+                      const g = GAMES[dg.gameSlug];
+                      const needs = Math.max(0, dg.requiredCount - dg.submissionCount);
+                      return (
+                        <button
+                          key={dg.gameSlug}
+                          type="button"
+                          onClick={() => openGame(g.slug)}
+                          className="bg-surface rounded-[18px] p-5 text-left space-y-2.5 hover:bg-surface2/60 transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                style={{ backgroundColor: g.color }}
+                                className="w-1.5 h-6 rounded-[3px] shrink-0"
+                              />
+                              <span className="text-[22px] font-extrabold truncate">{g.name}</span>
                             </div>
+                            {statusChip(dg.status)}
                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-extrabold ${
-                              dg.status === "Qualified"
-                                ? "bg-lime text-[#121212]"
-                                : dg.status === "Pending"
-                                ? "bg-surface2 text-muted"
-                                : "bg-orange/20 text-orange"
-                            }`}
-                          >
-                            {dg.status}
-                          </span>
-                        </div>
+                          <div className="text-[14px] text-muted">
+                            {dg.submissionCount} of {dg.totalPlayers} submitted
+                            {dg.status === "Pending" && needs > 0 ? ` · ${needs} more needed` : ""}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">{playerChips(dg, "md")}</div>
+                        </button>
+                      );
+                    })}
+                    <div className="bg-surface rounded-[18px] p-5 flex items-start gap-3 text-[14px]">
+                      <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-text">Qualified and Pending</div>
+                        <p className="text-muted mt-0.5">
+                          A game counts towards the league once {required} of {data.players.length}{" "}
+                          players have submitted. Until then it is Pending and awards no points.
+                        </p>
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* =========================================================
             3. GLOBAL STATISTICS VIEW (Screens 3 & 4)
@@ -1569,6 +1727,9 @@ export function FatherdleApp({
               })}
             </div>
 
+            {/* Period for the history, distribution and player stats below */}
+            {renderPeriodSelector()}
+
             {/* Game Coloured Hero Card (5.1) */}
             <div
               style={{ backgroundColor: data.gamePage.game.color }}
@@ -1602,7 +1763,7 @@ export function FatherdleApp({
                   </span>
                   <span className="px-3.5 py-1.5 rounded-full bg-[#121212] text-lime text-[12px] font-extrabold whitespace-nowrap">
                     {data.gamePage.todayStanding.status === "Qualified"
-                      ? "Qualified: counts towards today's league"
+                      ? `Qualified: counts towards ${gameDate && gameDate !== data.todayDate ? "that day's" : "today's"} league`
                       : data.gamePage.todayStanding.status === "Pending"
                       ? `Pending: needs ${data.gamePage.todayStanding.requiredCount} submissions`
                       : "Excluded from league points"}
@@ -1656,13 +1817,41 @@ export function FatherdleApp({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h2 className="text-[19px] font-bold tracking-tight">
-                      Today&apos;s results
+                      {(gameDate || data.todayDate) === data.todayDate
+                        ? "Today's results"
+                        : "Results"}
                     </h2>
-                    <span className="text-xs text-muted">
-                      {data.gamePage.todayStanding.isFinalised
-                        ? "Final"
-                        : "Provisional"}
-                    </span>
+                    <div className="flex items-center gap-1.5 text-xs text-muted">
+                      <button
+                        type="button"
+                        aria-label="Previous day"
+                        onClick={() => setGameDate(shiftIsoDate(gameDate || data.todayDate, -1))}
+                        className="w-6 h-6 rounded-full border border-line hover:bg-surface2 text-text"
+                      >
+                        ‹
+                      </button>
+                      <span className="min-w-[78px] text-center font-semibold text-text">
+                        {new Date(`${gameDate || data.todayDate}T12:00:00Z`).toLocaleDateString(
+                          "en-GB",
+                          { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Next day"
+                        disabled={(gameDate || data.todayDate) >= data.todayDate}
+                        onClick={() => {
+                          const next = shiftIsoDate(gameDate || data.todayDate, 1);
+                          setGameDate(next >= data.todayDate ? "" : next);
+                        }}
+                        className="w-6 h-6 rounded-full border border-line hover:bg-surface2 text-text disabled:opacity-30"
+                      >
+                        ›
+                      </button>
+                      <span className="ml-1">
+                        {data.gamePage.todayStanding.isFinalised ? "Final" : "Provisional"}
+                      </span>
+                    </div>
                   </div>
 
                   <table className="w-full text-left border-collapse tabular-nums">

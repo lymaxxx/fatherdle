@@ -134,11 +134,19 @@ export async function GET(req: NextRequest) {
       allSubmissions,
       players
     );
+    // The game page can show any past day's leaderboard (default: today).
+    const requestedGameDate = searchParams.get("gameDate") || "";
+    const gameDate =
+      /^\d{4}-\d{2}-\d{2}$/.test(requestedGameDate) && requestedGameDate <= todayDate
+        ? requestedGameDate
+        : todayDate;
     const selectedGameToday =
-      todayGames.find((g) => g.gameSlug === validGameSlug) ||
+      (gameDate === todayDate
+        ? todayGames.find((g) => g.gameSlug === validGameSlug)
+        : undefined) ||
       calculateAllDailyStandings(
-        todayDate,
-        todayDate,
+        gameDate,
+        gameDate,
         allSubmissions,
         players,
         todayDate,
