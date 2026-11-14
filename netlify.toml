@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# The Next.js runtime is detected and installed automatically by Netlify.
+# League data is stored in Netlify Blobs, so no database needs to be provisioned.
+#
+# Environment variables (Site configuration -> Environment variables):
+#   FATHERDLE_DEMO=1   optional: seed the fictional demo league and pin "today" to 2026-11-14.
+#                      Leave unset for a real, empty league using the Europe/London date.
