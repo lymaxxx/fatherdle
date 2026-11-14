@@ -4,9 +4,9 @@ export const APP_NAME = "Fatherdle";
 export const APP_WORDMARK = "FATHERDLE";
 export const TIMEZONE = "Europe/London";
 // A game counts towards the league once this many players have submitted it that day.
-// The demo league was built around 4; a real group of ~6 casual players works better with 2.
+// The demo league was built around 4; a real group of ~6 casual players works better with 3.
 export const DEFAULT_MIN_SUBMISSIONS =
-  process.env.FATHERDLE_DEMO === "1" || process.env.FATHERDLE_DEMO === "true" ? 4 : 2;
+  process.env.FATHERDLE_DEMO === "1" || process.env.FATHERDLE_DEMO === "true" ? 4 : 3;
 
 export const TOKENS = {
   bg: "#121212",

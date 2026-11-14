@@ -692,7 +692,7 @@ export function FatherdleApp({
                   <div className="text-[12px] leading-relaxed">
                     <div className="font-bold text-text">Qualified and Pending</div>
                     <p className="text-muted mt-0.5">
-                      A game counts towards the league once {data.today.games[0]?.requiredCount ?? 2} of{" "}
+                      A game counts towards the league once {data.today.games[0]?.requiredCount ?? 3} of{" "}
                       {data.players.length} players
                       have submitted. Until then it is Pending and awards no points.
                     </p>
