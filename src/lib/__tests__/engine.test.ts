@@ -144,10 +144,10 @@ describe("League Scoring, Qualification & Metric Calculations (Section 11)", () 
     const period = resolveDatePeriod("week", "2026-11-14");
     const { series } = calculateTimeSeries(period, subs, TEST_PLAYERS, "2026-11-14");
 
-    const nov8 = series.find((d) => d.date === "2026-11-08")!;
+    const nov8 = series.find((d) => d.date === "2026-11-09")!; // league weeks start on Monday
     const nov12 = series.find((d) => d.date === "2026-11-12")!;
 
-    expect(nov8.rankByPlayer["p6"]).toBeNull(); // Dan had not joined/played on Nov 8
+    expect(nov8.rankByPlayer["p6"]).toBeNull(); // Dan had not joined/played on Nov 9
     expect(nov12.rankByPlayer["p6"]).not.toBeNull(); // Ranked once he played on Nov 12
   });
 
@@ -157,8 +157,8 @@ describe("League Scoring, Qualification & Metric Calculations (Section 11)", () 
     expect(emptyRows).toHaveLength(6);
     expect(emptyRows.every((r) => r.totalPoints === 0 && r.positionChange === null)).toBe(true);
 
-    // Previous week (1-7 Nov): p2 is 1st, p1 is 2nd
-    // Current week (8-14 Nov): p1 is 1st, p2 is 2nd
+    // Previous league week (2-8 Nov): p2 is 1st, p1 is 2nd
+    // Current league week (9-14 Nov): p1 is 1st, p2 is 2nd
     const subs: Submission[] = [
       makeSub({ playerId: "p2", gameSlug: "maptap", leagueDate: "2026-11-05", primaryValue: 980 }),
       makeSub({ playerId: "p1", gameSlug: "maptap", leagueDate: "2026-11-05", primaryValue: 940 }),

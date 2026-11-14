@@ -12,6 +12,9 @@ npm run dev:demo     # fictional six-player league, "today" pinned to 14 Nov 202
 npm test
 ```
 
+Useful switches (environment variables): `FATHERDLE_TODAY=2026-11-16` pretends it is that day (try the
+Monday banner), `FATHERDLE_SEED=none` skips the preloaded chat history.
+
 ## Deploy to Netlify
 
 1. Push this repo to GitHub, then in Netlify choose **Add new site -> Import an existing project**

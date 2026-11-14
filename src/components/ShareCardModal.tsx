@@ -5,10 +5,17 @@ import { Download, Share2, X } from "lucide-react";
 import { DailyGameStanding, DatePeriod, GameSlug, PlayerStandingRow } from "@/lib/types";
 import { APP_WORDMARK, GAMES } from "@/lib/constants";
 
-const DM = '"DM Sans", system-ui, sans-serif';
-const SERIF = '"Instrument Serif", Georgia, serif';
-const CARD_W = 1080;
-const CARD_H = 1350;
+import {
+  CARD_H,
+  CARD_W,
+  DM,
+  Op,
+  SERIF,
+  drawOps,
+  leagueCurrentOps,
+  leagueFinalOps,
+} from "@/lib/share-scene";
+import type { LeagueWeek } from "@/lib/analytics/feed";
 
 function playerNameSize(name: string): number {
   return Math.min(176, Math.floor(880 / Math.max(1, name.length * 0.6)));
@@ -28,14 +35,16 @@ export function ShareCardModal({
   allStandings,
   period,
   dayGames,
+  week,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  mode: "league" | "day";
+  mode: "league" | "final" | "day" | "player";
   playerRow: PlayerStandingRow;
   allStandings: PlayerStandingRow[];
   period: DatePeriod;
   dayGames?: DailyGameStanding[];
+  week?: LeagueWeek;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +97,13 @@ export function ShareCardModal({
     .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
     .toUpperCase();
 
+  const sceneOps: Op[] =
+    week && mode === "final"
+      ? leagueFinalOps(week)
+      : week && mode === "league"
+      ? leagueCurrentOps(week)
+      : [];
+
   const handleDownloadSvgCard = async (useWebShare = false) => {
     // Make sure the brand fonts are ready before painting to canvas.
     try {
@@ -106,7 +122,9 @@ export function ShareCardModal({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    if (mode === "league") {
+    if ((mode === "league" || mode === "final") && week) {
+      drawOps(ctx, sceneOps);
+    } else if (mode === "player") {
       ctx.fillStyle = "#121212";
       ctx.fillRect(0, 0, 1080, 1350);
 
@@ -264,7 +282,7 @@ export function ShareCardModal({
       ctx.fillText("Pending games count once enough players have submitted.", 56, 1266);
     }
 
-    const fileName = `fatherdle-${mode}-${period.endDate}.png`;
+    const fileName = `fatherdle-${mode}-${week && (mode === "league" || mode === "final") ? week.startDate : period.endDate}.png`;
     const download = () => {
       const link = document.createElement("a");
       link.download = fileName;
@@ -323,7 +341,7 @@ export function ShareCardModal({
           </div>
         </div>
 
-        {mode === "league" ? (
+        {mode === "player" ? (
           <div
             ref={cardRef}
             className="bg-bg border border-line rounded-[28px] p-6 flex flex-col justify-between aspect-[4/5] shadow-2xl"
@@ -411,6 +429,10 @@ export function ShareCardModal({
               </div>
             </div>
           </div>
+        ) : (mode === "league" || mode === "final") && week ? (
+          <ScaledCard>
+            <SceneView ops={sceneOps} />
+          </ScaledCard>
         ) : (
           <ScaledCard>
             <DayCard
@@ -568,6 +590,74 @@ function DayCard({
       <div style={abs({ left: 56, top: 1252, fontSize: 22, fontWeight: 500, color: "#948F84" })}>
         Pending games count once enough players have submitted.
       </div>
+    </div>
+  );
+}
+
+/** Draws a list of share-card shapes and text as absolutely positioned elements. */
+function SceneView({ ops }: { ops: Op[] }) {
+  return (
+    <div style={{ width: CARD_W, height: CARD_H, position: "relative", background: "#121212" }}>
+      {ops.map((op, i) => {
+        if (op.t === "rect") {
+          const r = Array.isArray(op.r) ? op.r.map((n) => `${n}px`).join(" ") : op.r ? `${op.r}px` : 0;
+          return (
+            <div
+              key={i}
+              style={{ position: "absolute", left: op.x, top: op.y, width: op.w, height: op.h, background: op.fill, borderRadius: r }}
+            />
+          );
+        }
+        if (op.t === "circle") {
+          return (
+            <div
+              key={i}
+              style={{ position: "absolute", left: op.x, top: op.y, width: op.d, height: op.d, borderRadius: "50%", background: op.fill }}
+            />
+          );
+        }
+        if (op.t === "icon") {
+          return (
+            <svg
+              key={i}
+              viewBox="0 0 24 24"
+              width={op.size}
+              height={op.size}
+              fill="none"
+              stroke={op.color}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ position: "absolute", left: op.x, top: op.y }}
+            >
+              {op.paths.map((d) => (
+                <path key={d} d={d} />
+              ))}
+            </svg>
+          );
+        }
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: op.x,
+              top: op.top,
+              width: op.align === "right" ? op.w : undefined,
+              textAlign: op.align === "right" ? "right" : "left",
+              fontFamily: op.serif ? SERIF : DM,
+              fontSize: op.size,
+              lineHeight: `${op.lh}px`,
+              fontWeight: op.weight,
+              letterSpacing: op.ls ?? 0,
+              color: op.color,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {op.text}
+          </div>
+        );
+      })}
     </div>
   );
 }

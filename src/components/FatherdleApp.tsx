@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   BarChart3,
   ClipboardPaste,
   ExternalLink,
@@ -35,6 +36,8 @@ import {
 } from "@/lib/analytics/game-modules";
 import { APP_WORDMARK, GAMES } from "@/lib/constants";
 import { AdminPanel } from "@/components/AdminPanel";
+import { FeedView, MondayBanner, PreviousLeagues } from "@/components/LeaguesAndFeed";
+import type { FeedItem, LeagueWeek, LeaguesPayload } from "@/lib/analytics/feed";
 import {
   ActivityCalendarHeatmap,
   GameHistoryChart,
@@ -46,10 +49,12 @@ import { HighlightBlocks } from "./HighlightBlocks";
 import { PasteResultModal } from "./PasteResultModal";
 import { ShareCardModal } from "./ShareCardModal";
 
-export type NavTab = "today" | "statistics" | "games" | "players" | "onboarding" | "admin";
+export type NavTab = "today" | "statistics" | "games" | "players" | "onboarding" | "admin" | "feed";
 
 interface LeagueApiResponse {
   todayDate: string;
+  leagues: LeaguesPayload;
+  feed: { items: FeedItem[]; hasMore: boolean };
   period: DatePeriod;
   players: Player[];
   games: GameConfig[];
@@ -107,7 +112,7 @@ export function FatherdleApp({
   initialTab?: NavTab;
   initialGameSlug?: GameSlug;
 } = {}) {
-  const [activeTab, setActiveTab] = useState<NavTab>(initialTab ?? "statistics");
+  const [activeTab, setActiveTab] = useState<NavTab>(initialTab ?? "today");
   const [preset, setPreset] = useState<PeriodPreset>("week");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -141,7 +146,12 @@ export function FatherdleApp({
     setIsJoinModalOpen(true);
   };
   const [newPlayerName, setNewPlayerName] = useState("");
-  const [shareModalMode, setShareModalMode] = useState<"league" | "day" | null>(null);
+  const [shareModalMode, setShareModalMode] = useState<"league" | "final" | "day" | "player" | null>(null);
+  const [shareWeek, setShareWeek] = useState<LeagueWeek | null>(null);
+  const [todayView, setTodayView] = useState<"today" | "leagues">("today");
+  const [feedFilter, setFeedFilter] = useState<GameSlug | "all">("all");
+  const [feedLimit, setFeedLimit] = useState(20);
+  const [dismissedBanner, setDismissedBanner] = useState("");
 
   const fetchLeagueData = useCallback(async () => {
     setLoading(true);
@@ -152,6 +162,7 @@ export function FatherdleApp({
         gameSlug: selectedGameSlug,
       });
       if (gameDate) params.set("gameDate", gameDate);
+      if (feedLimit !== 20) params.set("feedLimit", String(feedLimit));
       if (preset === "custom" && customStart && customEnd) {
         params.set("start", customStart);
         params.set("end", customEnd);
@@ -188,7 +199,7 @@ export function FatherdleApp({
     } finally {
       setLoading(false);
     }
-  }, [preset, customStart, customEnd, viewedPlayerId, selectedGameSlug, gameDate, visiblePlayerIds.length]);
+  }, [preset, customStart, customEnd, viewedPlayerId, selectedGameSlug, gameDate, feedLimit, visiblePlayerIds.length]);
 
   useEffect(() => {
     fetchLeagueData();
@@ -200,6 +211,33 @@ export function FatherdleApp({
       .then((r) => r.json())
       .then((j) => setIsAdmin(Boolean(j.authed)))
       .catch(() => setIsAdmin(false));
+  }, []);
+
+  // iOS Safari ignores user-scalable=no, so also swallow pinch gestures ourselves.
+  useEffect(() => {
+    const stop = (e: Event) => e.preventDefault();
+    const stopMulti = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+    document.addEventListener("gesturestart", stop);
+    document.addEventListener("gesturechange", stop);
+    document.addEventListener("touchmove", stopMulti, { passive: false });
+    return () => {
+      document.removeEventListener("gesturestart", stop);
+      document.removeEventListener("gesturechange", stop);
+      document.removeEventListener("touchmove", stopMulti);
+    };
+  }, []);
+
+  // The feed updates in place while it is open.
+  useEffect(() => {
+    if (activeTab !== "feed") return;
+    const t = setInterval(() => fetchLeagueData(), 20000);
+    return () => clearInterval(t);
+  }, [activeTab, fetchLeagueData]);
+
+  useEffect(() => {
+    setDismissedBanner(window.localStorage.getItem("fatherdle.bannerDismissed") || "");
   }, []);
 
   // Every page starts at the top.
@@ -215,7 +253,6 @@ export function FatherdleApp({
       setCurrentUserId("");
       setViewedPlayerId("");
       setHasJoined(false);
-      if (activeTab !== "admin") setActiveTab("onboarding");
     }
   }, [data, identityChecked, currentUserId, activeTab]);
 
@@ -236,8 +273,6 @@ export function FatherdleApp({
       setCurrentUserId(saved);
       setViewedPlayerId(saved);
       setHasJoined(true);
-    } else if (!initialTab) {
-      setActiveTab("onboarding");
     }
     setIdentityChecked(true);
   }, [data, identityChecked, initialTab]);
@@ -444,6 +479,7 @@ export function FatherdleApp({
             {(
               [
                 { id: "today", label: "Today" },
+                { id: "feed", label: "Feed" },
                 { id: "statistics", label: "Statistics" },
                 { id: "games", label: "Games" },
                 { id: "players", label: "Players" },
@@ -624,6 +660,20 @@ export function FatherdleApp({
           <AdminPanel onChanged={fetchLeagueData} onAuthChange={setIsAdmin} />
         )}
 
+        {activeTab === "feed" && (
+          <FeedView
+            items={data.feed.items}
+            hasMore={data.feed.hasMore}
+            onMore={() => setFeedLimit((n) => n + 20)}
+            filter={feedFilter}
+            onFilter={setFeedFilter}
+            games={data.games.map((g) => ({ slug: g.slug, name: g.name, color: g.color }))}
+            todayDate={data.todayDate}
+            todayStandings={data.today.standings}
+            onPaste={() => setIsPasteOpen(true)}
+          />
+        )}
+
         {activeTab === "today" && (() => {
           const totalGames = data.today.games.length;
           const mySubmitted = data.today.games.filter((g) =>
@@ -637,6 +687,66 @@ export function FatherdleApp({
             month: "short",
             timeZone: "UTC",
           });
+          const isMonday = new Date(`${data.todayDate}T12:00:00Z`).getUTCDay() === 1;
+          const yesterday = shiftIsoDate(data.todayDate, -1);
+          const lastWeek = data.leagues.previous.find((w) => w.endDate === yesterday);
+          const showBanner = isMonday && !!lastWeek && dismissedBanner !== lastWeek.startDate;
+          const openWeekResults = (w: LeagueWeek) => {
+            setPreset("custom");
+            setCustomStart(w.startDate);
+            setCustomEnd(w.endDate);
+            setActiveTab("statistics");
+          };
+          const shareFinal = (w: LeagueWeek) => {
+            setShareWeek(w);
+            setShareModalMode("final");
+          };
+          const firstLeagueEnds = new Date(`${data.leagues.current.endDate}T12:00:00Z`).toLocaleDateString(
+            "en-GB",
+            { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }
+          );
+          const toggle = (
+            <div className="inline-flex bg-surface rounded-full p-1 w-full md:w-auto">
+              {(
+                [
+                  ["today", "Today"],
+                  ["leagues", "Previous leagues"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTodayView(id)}
+                  className={`flex-1 md:flex-none px-5 py-2 rounded-full text-[14px] font-bold ${
+                    todayView === id ? "bg-text text-[#121212]" : "text-muted"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          );
+          const banner =
+            showBanner && lastWeek ? (
+              <MondayBanner
+                week={lastWeek}
+                currentUserId={currentUserId}
+                onSeeResults={() => openWeekResults(lastWeek)}
+                onShare={() => shareFinal(lastWeek)}
+                onDismiss={() => {
+                  window.localStorage.setItem("fatherdle.bannerDismissed", lastWeek.startDate);
+                  setDismissedBanner(lastWeek.startDate);
+                }}
+              />
+            ) : null;
+          const leaguesView = (
+            <PreviousLeagues
+              weeks={data.leagues.previous}
+              currentUserId={currentUserId}
+              onOpen={openWeekResults}
+              firstLeagueEnds={firstLeagueEnds}
+            />
+          );
           const standings = data.today.standings;
           const maxPts = Math.max(1, ...standings.map((r) => r.totalPoints));
           const me = data.players.find((p) => p.id === currentUserId);
@@ -722,6 +832,12 @@ export function FatherdleApp({
                   </div>
                 </div>
 
+                {toggle}
+                {todayView === "leagues" ? (
+                  leaguesView
+                ) : (
+                  <>
+                {banner}
                 <div>
                   {standings.map((row) => {
                     const isMe = row.player.id === currentUserId;
@@ -818,6 +934,8 @@ export function FatherdleApp({
                     )}
                   </div>
                 </div>
+                  </>
+                )}
               </div>
 
               {/* ============ DESKTOP ============ */}
@@ -830,7 +948,9 @@ export function FatherdleApp({
                     <p className="text-[16px] text-muted">
                       {dateLabel} · {qualifiedCount} of {totalGames} games count
                     </p>
+                    <div className="pt-2">{toggle}</div>
                   </div>
+                  {todayView === "today" && (
                   <div className="flex items-center gap-4">
                     <div className="bg-lime text-[#121212] rounded-[32px] flex items-center gap-5 py-3 pl-7 pr-3">
                       <span className="font-serif text-[56px] leading-[56px] tracking-[-2px] whitespace-nowrap">
@@ -860,8 +980,14 @@ export function FatherdleApp({
                       Share my day
                     </button>
                   </div>
+                  )}
                 </div>
 
+                {todayView === "leagues" ? (
+                  leaguesView
+                ) : (
+                  <>
+                {banner}
                 <div className="space-y-2.5">
                   {standings.map((row) => {
                     const isMe = row.player.id === currentUserId;
@@ -972,6 +1098,8 @@ export function FatherdleApp({
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
             </div>
           );
@@ -1542,7 +1670,7 @@ export function FatherdleApp({
               allStandings={data.stats.standings}
               period={data.period}
               series={data.stats.timeSeries.series}
-              onShare={() => setShareModalMode("league")}
+              onShare={() => setShareModalMode("player")}
               isPlayerPage
             />
 
@@ -2155,9 +2283,10 @@ export function FatherdleApp({
           <span>Paste result</span>
         </button>
 
-        <nav className="bg-surface border border-line/80 rounded-full p-1 grid grid-cols-4 gap-1">
+        <nav className="bg-surface border border-line/80 rounded-full p-1 grid grid-cols-5 gap-1">
           {[
             { id: "today" as NavTab, label: "Today", icon: Trophy },
+            { id: "feed" as NavTab, label: "Feed", icon: Activity },
             { id: "statistics" as NavTab, label: "Stats", icon: BarChart3 },
             { id: "games" as NavTab, label: "Games", icon: Gamepad2 },
             { id: "players" as NavTab, label: "Me", icon: Users },
@@ -2290,6 +2419,7 @@ export function FatherdleApp({
           allStandings={data.stats.standings}
           period={shareModalMode === "day" ? { ...data.period, endDate: data.todayDate } : data.period}
           dayGames={data.today.games}
+          week={shareModalMode === "final" ? shareWeek ?? undefined : data.leagues.current}
         />
       )}
     </div>

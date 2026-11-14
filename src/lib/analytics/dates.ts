@@ -30,6 +30,13 @@ export function getLondonDateString(date: Date = new Date()): string {
   return formatter.format(date);
 }
 
+/** The Monday on or before a YYYY-MM-DD date. Leagues run Monday to Sunday. */
+export function mondayOf(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay(); // 0 = Sunday
+  return addDays(dateStr, -((dow + 6) % 7));
+}
+
 /**
  * Adds `days` calendar days to a YYYY-MM-DD string deterministically.
  */
@@ -110,10 +117,12 @@ export function resolveDatePeriod(
     }
 
     case "week": {
-      // 7-day window ending on anchorDate (e.g. Sun 8 Nov – Sat 14 Nov)
-      const startDate = addDays(anchorDate, -6);
-      const prevEndDate = addDays(startDate, -1);
-      const prevStartDate = addDays(prevEndDate, -6);
+      // The current league: Monday up to the anchor date. Compared with the same number of days
+      // from the start of the previous league week.
+      const startDate = mondayOf(anchorDate);
+      const elapsed = listDatesInRange(startDate, anchorDate).length;
+      const prevStartDate = addDays(startDate, -7);
+      const prevEndDate = addDays(prevStartDate, elapsed - 1);
       return {
         preset: "week",
         startDate,

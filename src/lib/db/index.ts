@@ -27,6 +27,9 @@ export function isDemoMode(): boolean {
 }
 
 export function getTodayDate(): string {
+  // FATHERDLE_TODAY=YYYY-MM-DD pretends it is that day (handy for trying the Monday banner)
+  const forced = process.env.FATHERDLE_TODAY;
+  if (forced && /^\d{4}-\d{2}-\d{2}$/.test(forced)) return forced;
   return isDemoMode() ? DEMO_TODAY : getLondonDateString();
 }
 

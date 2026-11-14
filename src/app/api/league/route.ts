@@ -17,6 +17,7 @@ import {
   calculateTimeSeries,
 } from "@/lib/analytics/engine";
 import { generateAutomaticInsights } from "@/lib/analytics/insights";
+import { buildFeed, buildLeagues } from "@/lib/analytics/feed";
 import { createGameAnalyticsModule } from "@/lib/analytics/game-modules";
 import { parseMultiGamePaste } from "@/lib/parsers";
 import { ACTIVE_GAME_SLUGS, GAMES } from "@/lib/constants";
@@ -154,8 +155,14 @@ export async function GET(req: NextRequest) {
         [validGameSlug]
       )[0];
 
+    const feedLimit = Math.min(200, Math.max(10, Number(searchParams.get("feedLimit")) || 20));
+    const feed = buildFeed(todayDate, allSubmissions, players, feedLimit);
+    const leagues = buildLeagues(todayDate, allSubmissions, players);
+
     return NextResponse.json({
       todayDate,
+      leagues,
+      feed,
       period,
       players,
       games: Object.values(GAMES).filter((g) => g.slug !== "custom"),
