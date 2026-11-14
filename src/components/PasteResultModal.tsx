@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ClipboardPaste, CheckCircle2, AlertCircle, Sparkles, X } from "lucide-react";
 import { parseMultiGamePaste } from "@/lib/parsers";
 import { GAMES } from "@/lib/constants";
@@ -105,6 +105,14 @@ export function PasteResultModal({
   const [leagueDate, setLeagueDate] = useState(defaultDate);
   const [rawText, setRawText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Re-sync whenever the modal opens so it reflects the current identity and date.
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedPlayerId(activePlayerId || players[0]?.id || "");
+      setLeagueDate(defaultDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activePlayerId, defaultDate]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -201,7 +209,7 @@ export function PasteResultModal({
               <input
                 type="date"
                 value={leagueDate}
-                max="2026-11-14"
+                max={defaultDate}
                 onChange={(e) => setLeagueDate(e.target.value)}
                 className="w-full bg-surface2 border border-line rounded-xl px-3.5 py-2.5 text-sm font-bold text-text focus:outline-none focus:border-lime"
               />
@@ -314,7 +322,7 @@ export function PasteResultModal({
           )}
 
           {/* Footer actions */}
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface border-t border-line/60 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}

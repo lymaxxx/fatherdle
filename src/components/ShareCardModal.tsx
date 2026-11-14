@@ -1,9 +1,18 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Download, Share2, X } from "lucide-react";
 import { DailyGameStanding, DatePeriod, GameSlug, PlayerStandingRow } from "@/lib/types";
 import { APP_WORDMARK, GAMES } from "@/lib/constants";
+
+const DM = '"DM Sans", system-ui, sans-serif';
+const SERIF = '"Instrument Serif", Georgia, serif';
+const CARD_W = 1080;
+const CARD_H = 1350;
+
+function playerNameSize(name: string): number {
+  return Math.min(176, Math.floor(880 / Math.max(1, name.length * 0.6)));
+}
 
 function formatOrdinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
@@ -79,7 +88,17 @@ export function ShareCardModal({
     .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
     .toUpperCase();
 
-  const handleDownloadSvgCard = (useWebShare = false) => {
+  const handleDownloadSvgCard = async (useWebShare = false) => {
+    // Make sure the brand fonts are ready before painting to canvas.
+    try {
+      await Promise.all([
+        document.fonts.load(`800 40px ${DM}`),
+        document.fonts.load(`500 20px ${DM}`),
+        document.fonts.load(`40px ${SERIF}`),
+      ]);
+    } catch {
+      // fall back to system fonts
+    }
     // Generate a 1080x1350 PNG using Canvas so the user gets a real 4:5 share image
     const canvas = document.createElement("canvas");
     canvas.width = 1080;
@@ -98,7 +117,7 @@ export function ShareCardModal({
       ctx.fill();
 
       ctx.fillStyle = "#F4F1EA";
-      ctx.font = "bold 22px sans-serif";
+      ctx.font = `bold 22px ${DM}`;
       ctx.fillText(APP_WORDMARK, 94, 80);
       ctx.textAlign = "right";
       ctx.fillText(period.label.toUpperCase(), 1020, 80);
@@ -111,18 +130,18 @@ export function ShareCardModal({
       ctx.fill();
 
       ctx.fillStyle = "#121212";
-      ctx.font = "bold 22px sans-serif";
+      ctx.font = `bold 22px ${DM}`;
       ctx.fillText(
         `${playerRow.player.name.toUpperCase()} · THIS ${period.preset.toUpperCase()}`,
         104,
         185
       );
 
-      ctx.font = "190px Georgia, serif";
+      ctx.font = `190px ${SERIF}`;
       ctx.fillText(formatOrdinal(playerRow.rank), 100, 390);
       ctx.fillText(`${playerRow.totalPoints}`, 620, 390);
 
-      ctx.font = "bold 26px sans-serif";
+      ctx.font = `bold 26px ${DM}`;
       ctx.fillText("League position", 104, 480);
       ctx.fillText(posChangeText, 104, 516);
       ctx.fillText("Points", 620, 480);
@@ -138,7 +157,7 @@ export function ShareCardModal({
         ctx.fill();
 
         ctx.fillStyle = "#121212";
-        ctx.font = "bold 24px sans-serif";
+        ctx.font = `bold 24px ${DM}`;
         const label =
           row.player.id === playerRow.player.id
             ? `${row.player.name} (you)`
@@ -146,7 +165,7 @@ export function ShareCardModal({
         ctx.fillText(label, 78, y + 36);
 
         ctx.textAlign = "right";
-        ctx.font = "42px Georgia, serif";
+        ctx.font = `42px ${SERIF}`;
         ctx.fillText(`${row.totalPoints}`, 54 + barW - 22, y + 42);
         ctx.textAlign = "left";
         y += 70;
@@ -160,79 +179,89 @@ export function ShareCardModal({
       ctx.stroke();
 
       ctx.fillStyle = "#F4F1EA";
-      ctx.font = "96px Georgia, serif";
+      ctx.font = `96px ${SERIF}`;
       ctx.fillText(`${playerRow.firstPlaces}`, 54, 1225);
       ctx.fillText(`${playerRow.qualifiedGamesPlayed}`, 340, 1225);
       ctx.fillText(bestGameName, 620, 1225);
 
       ctx.fillStyle = "#948F84";
-      ctx.font = "24px sans-serif";
+      ctx.font = `24px ${DM}`;
       ctx.fillText("first places", 54, 1270);
       ctx.fillText("games played", 340, 1270);
       ctx.fillText("best game", 620, 1270);
     } else {
+      ctx.textBaseline = "middle";
       ctx.fillStyle = "#121212";
-      ctx.fillRect(0, 0, 1080, 1350);
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
 
+      // Header
       ctx.fillStyle = "#E6EB5E";
       ctx.beginPath();
-      ctx.arc(68, 72, 12, 0, Math.PI * 2);
+      ctx.arc(67, 73, 11, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#F4F1EA";
-      ctx.font = "bold 22px sans-serif";
-      ctx.fillText(APP_WORDMARK, 94, 80);
+      ctx.letterSpacing = "3px";
+      ctx.font = `800 22px ${DM}`;
+      ctx.fillText(APP_WORDMARK, 92, 77);
+      ctx.font = `700 22px ${DM}`;
       ctx.textAlign = "right";
-      ctx.fillText(dayLabel, 1020, 80);
+      ctx.fillText(dayLabel, 1024, 77);
       ctx.textAlign = "left";
 
-      // Player summary
-      ctx.fillStyle = playerRow.player.color;
+      // Lime hero
+      ctx.fillStyle = "#E6EB5E";
       ctx.beginPath();
-      ctx.arc(68, 150, 10, 0, Math.PI * 2);
+      ctx.roundRect(56, 110, 968, 420, 48);
       ctx.fill();
-      ctx.fillStyle = "#F4F1EA";
-      ctx.font = "bold 28px sans-serif";
-      ctx.fillText(`${playerRow.player.name.toUpperCase()} · TODAY`, 90, 160);
 
-      ctx.font = "150px Georgia, serif";
-      ctx.fillText(formatOrdinal(playerRow.rank), 54, 300);
-      ctx.fillText(`${playerRow.totalPoints}`, 420, 300);
-      ctx.fillStyle = "#948F84";
-      ctx.font = "bold 24px sans-serif";
-      ctx.fillText("League position today", 58, 340);
-      ctx.fillText("Points today", 424, 340);
-      ctx.textAlign = "right";
-      ctx.fillText(`${dayRows.length} game${dayRows.length === 1 ? "" : "s"} played`, 1026, 340);
-      ctx.textAlign = "left";
+      ctx.fillStyle = "#121212";
+      const nameSize = playerNameSize(playerRow.player.name);
+      ctx.letterSpacing = `${Math.round((-7 * nameSize) / 176)}px`;
+      ctx.font = `800 ${nameSize}px ${DM}`;
+      ctx.fillText(playerRow.player.name, 96, 110 + 52 + 88);
 
-      const rowH = Math.min(100, Math.floor(920 / Math.max(1, dayRows.length)) - 6);
-      let y = 380;
-      dayRows.forEach((r) => {
+      ctx.letterSpacing = "-3px";
+      ctx.font = `96px ${SERIF}`;
+      ctx.fillText(formatOrdinal(playerRow.rank), 100, 426);
+      ctx.fillText(`${playerRow.totalPoints}`, 386, 426);
+      ctx.fillText(`${dayRows.length}`, 676, 426);
+
+      ctx.letterSpacing = "0px";
+      ctx.font = `600 20px ${DM}`;
+      ctx.fillText("League position", 104, 489);
+      ctx.fillText("Points", 390, 489);
+      ctx.fillText("Games played", 680, 489);
+
+      // Game rows
+      dayRows.forEach((r, i) => {
+        const y = 556 + i * 76;
         ctx.fillStyle = r.game.color;
         ctx.beginPath();
-        ctx.roundRect(54, y, 972, rowH, 16);
+        ctx.roundRect(56, y, 968, 68, 16);
         ctx.fill();
 
         ctx.fillStyle = "#121212";
-        ctx.font = "bold 30px sans-serif";
-        ctx.fillText(r.game.name, 80, y + rowH / 2 - 4);
-        ctx.font = "22px sans-serif";
-        ctx.globalAlpha = 0.7;
-        ctx.fillText(r.vs, 80, y + rowH / 2 + 26);
-        ctx.globalAlpha = 1;
+        ctx.font = `800 26px ${DM}`;
+        ctx.fillText(r.game.name, 80, y + 22);
+        ctx.font = `500 18px ${DM}`;
+        ctx.fillStyle = "rgba(18,18,18,0.7)";
+        ctx.fillText(r.vs, 80, y + 52);
 
         ctx.textAlign = "right";
-        ctx.font = "50px Georgia, serif";
-        ctx.fillText(r.result, 760, y + rowH / 2 + 16);
-        ctx.font = "bold 30px sans-serif";
-        ctx.fillText(`${formatOrdinal(r.placement)} of ${r.outOf}`, 1000, y + rowH / 2 - 4);
-        ctx.font = "22px sans-serif";
-        ctx.globalAlpha = 0.7;
-        ctx.fillText(r.counts ? `+${r.points} pts` : "Pending", 1000, y + rowH / 2 + 26);
-        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#121212";
+        ctx.font = `50px ${SERIF}`;
+        ctx.fillText(r.result, 813, y + 34);
+        ctx.font = `800 26px ${DM}`;
+        ctx.fillText(`${formatOrdinal(r.placement)} of ${r.outOf}`, 1000, y + 22);
+        ctx.font = `500 18px ${DM}`;
+        ctx.fillStyle = "rgba(18,18,18,0.7)";
+        ctx.fillText(r.counts ? `+${r.points} pts` : "Pending", 1000, y + 52);
         ctx.textAlign = "left";
-        y += rowH + 8;
       });
+
+      ctx.fillStyle = "#948F84";
+      ctx.font = `500 22px ${DM}`;
+      ctx.fillText("Pending games count once enough players have submitted.", 56, 1266);
     }
 
     const fileName = `fatherdle-${mode}-${period.endDate}.png`;
@@ -383,73 +412,161 @@ export function ShareCardModal({
             </div>
           </div>
         ) : (
-          <div
-            ref={cardRef}
-            className="bg-bg border border-line rounded-[28px] p-6 flex flex-col aspect-[4/5] shadow-2xl"
-          >
-            <div className="flex items-center justify-between text-[11px] font-bold tracking-[0.14em] text-text">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-lime" />
-                <span>{APP_WORDMARK}</span>
-              </div>
-              <span>{dayLabel}</span>
-            </div>
+          <ScaledCard>
+            <DayCard
+              playerName={playerRow.player.name}
+              rank={playerRow.rank}
+              points={playerRow.totalPoints}
+              dayLabel={dayLabel}
+              rows={dayRows}
+            />
+          </ScaledCard>
+        )}
+      </div>
+    </div>
+  );
+}
 
-            <div className="mt-4 flex items-center gap-2 text-[11px] font-extrabold tracking-[0.1em] text-text">
-              <span
-                style={{ backgroundColor: playerRow.player.color }}
-                className="w-2 h-2 rounded-full"
-              />
-              {playerRow.player.name.toUpperCase()} · TODAY
-            </div>
-            <div className="flex items-end gap-6 mt-1">
-              <div>
-                <div className="font-serif text-[56px] leading-[0.9] text-text">
-                  {formatOrdinal(playerRow.rank)}
-                </div>
-                <div className="text-[10px] font-bold text-muted mt-1">League position</div>
-              </div>
-              <div>
-                <div className="font-serif text-[56px] leading-[0.9] text-text">
-                  {playerRow.totalPoints}
-                </div>
-                <div className="text-[10px] font-bold text-muted mt-1">Points today</div>
-              </div>
-              <div className="ml-auto text-[10px] font-bold text-muted pb-0.5">
-                {dayRows.length} game{dayRows.length === 1 ? "" : "s"} played
-              </div>
-            </div>
+type DayRow = {
+  key: string;
+  game: { name: string; color: string };
+  placement: number;
+  outOf: number;
+  result: string;
+  points: number;
+  counts: boolean;
+  vs: string;
+};
 
-            <div className="flex-1 flex flex-col gap-1 mt-3 min-h-0">
-              {dayRows.map((r) => (
-                <div
-                  key={r.key}
-                  style={{ backgroundColor: r.game.color }}
-                  className="flex-1 min-h-0 rounded-[8px] px-3 flex items-center justify-between text-[#121212]"
-                >
-                  <div className="min-w-0">
-                    <div className="text-[12px] font-extrabold truncate">{r.game.name}</div>
-                    <div className="text-[9px] font-semibold opacity-70 truncate">{r.vs}</div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-serif text-[20px] leading-none">{r.result}</span>
-                    <div className="text-right w-[58px]">
-                      <div className="text-[11px] font-extrabold">
-                        {formatOrdinal(r.placement)} of {r.outOf}
-                      </div>
-                      <div className="text-[9px] font-semibold opacity-70">
-                        {r.counts ? `+${r.points} pts` : "Pending"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {dayRows.length === 0 && (
-                <div className="text-muted text-sm mt-6">No results submitted today yet.</div>
-              )}
+/** Fits a fixed 1080x1350 card into whatever width the modal has. */
+function ScaledCard({ children }: { children: React.ReactNode }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.4);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setScale(el.clientWidth / CARD_W);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div
+      ref={wrapRef}
+      style={{ height: CARD_H * scale }}
+      className="w-full relative overflow-hidden rounded-[24px] shadow-2xl border border-line"
+    >
+      <div
+        style={{
+          width: CARD_W,
+          height: CARD_H,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Per-player daily card, laid out as in the design reference (1080x1350). */
+function DayCard({
+  playerName,
+  rank,
+  points,
+  dayLabel,
+  rows,
+}: {
+  playerName: string;
+  rank: number;
+  points: number;
+  dayLabel: string;
+  rows: DayRow[];
+}) {
+  const abs = (style: React.CSSProperties): React.CSSProperties => ({
+    position: "absolute",
+    whiteSpace: "nowrap",
+    ...style,
+  });
+  const nameSize = playerNameSize(playerName);
+  return (
+    <div
+      style={{
+        width: CARD_W,
+        height: CARD_H,
+        background: "#121212",
+        position: "relative",
+        fontFamily: DM,
+        color: "#121212",
+      }}
+    >
+      <div style={abs({ left: 56, top: 62, width: 22, height: 22, borderRadius: "50%", background: "#E6EB5E" })} />
+      <div style={abs({ left: 92, top: 62, fontSize: 22, fontWeight: 800, letterSpacing: 3, color: "#F4F1EA" })}>
+        {APP_WORDMARK}
+      </div>
+      <div style={abs({ left: 624, top: 62, width: 400, textAlign: "right", fontSize: 22, fontWeight: 700, letterSpacing: 3, color: "#F4F1EA" })}>
+        {dayLabel}
+      </div>
+
+      <div style={abs({ left: 56, top: 110, width: 968, height: 420, borderRadius: 48, background: "#E6EB5E", overflow: "hidden" })}>
+        <div style={abs({ left: 40, top: 52, fontSize: nameSize, lineHeight: "176px", fontWeight: 800, letterSpacing: (-7 * nameSize) / 176 })}>
+          {playerName}
+        </div>
+        {[
+          { x: 44, v: formatOrdinal(rank), label: "League position" },
+          { x: 330, v: `${points}`, label: "Points" },
+          { x: 620, v: `${rows.length}`, label: "Games played" },
+        ].map((m) => (
+          <React.Fragment key={m.label}>
+            <div style={abs({ left: m.x, top: 268, fontFamily: SERIF, fontSize: 96, lineHeight: "96px", letterSpacing: -3 })}>
+              {m.v}
+            </div>
+            <div style={abs({ left: m.x + 4, top: 366, fontSize: 20, fontWeight: 600 })}>{m.label}</div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {rows.map((r, i) => (
+        <div
+          key={r.key}
+          style={{
+            position: "absolute",
+            left: 56,
+            top: 556 + i * 76,
+            width: 968,
+            height: 68,
+            borderRadius: 16,
+            background: r.game.color,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            padding: "0 24px",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 26, fontWeight: 800, whiteSpace: "nowrap" }}>{r.game.name}</div>
+            <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2, whiteSpace: "nowrap" }}>
+              {r.vs}
             </div>
           </div>
-        )}
+          <div style={{ width: 213, textAlign: "right", fontFamily: SERIF, fontSize: 50, lineHeight: "50px", whiteSpace: "nowrap" }}>
+            {r.result}
+          </div>
+          <div style={{ width: 187, textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 26, fontWeight: 800, whiteSpace: "nowrap" }}>
+              {formatOrdinal(r.placement)} of {r.outOf}
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2 }}>
+              {r.counts ? `+${r.points} pts` : "Pending"}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div style={abs({ left: 56, top: 1252, fontSize: 22, fontWeight: 500, color: "#948F84" })}>
+        Pending games count once enough players have submitted.
       </div>
     </div>
   );

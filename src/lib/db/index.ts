@@ -1,149 +1,104 @@
-import Database from "better-sqlite3";
-import path from "path";
+import { getStore } from "@netlify/blobs";
 import fs from "fs";
-import { DEFAULT_PLAYERS, GAMES } from "../constants";
+import path from "path";
+import { DEFAULT_PLAYERS } from "../constants";
+import { getLondonDateString } from "../analytics/dates";
 import { GameSlug, Player, Submission } from "../types";
 
-const DB_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DB_DIR, "fatherdle.sqlite");
+/**
+ * Storage layer.
+ *
+ * League data (players + submissions) lives in one JSON document that is kept in memory
+ * and persisted to:
+ *   - Netlify Blobs when running on Netlify (survives deploys and cold starts)
+ *   - data/league.json when running locally
+ *
+ * FATHERDLE_DEMO=1 seeds a fictional six-player league and pins "today" to 2026-11-14.
+ * Without it the league starts empty and "today" is the real Europe/London date.
+ */
 
-let dbInstance: Database.Database | null = null;
+export const DEMO_TODAY = "2026-11-14";
 
-export function getDb(): Database.Database {
-  if (dbInstance) return dbInstance;
+export function isDemoMode(): boolean {
+  return process.env.FATHERDLE_DEMO === "1" || process.env.FATHERDLE_DEMO === "true";
+}
 
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
+export function getTodayDate(): string {
+  return isDemoMode() ? DEMO_TODAY : getLondonDateString();
+}
+
+interface LeagueData {
+  players: Player[];
+  submissions: Submission[];
+}
+
+const BLOB_STORE = "fatherdle";
+const BLOB_KEY = isDemoMode() ? "league-demo" : "league";
+const LOCAL_FILE = path.join(
+  process.cwd(),
+  "data",
+  isDemoMode() ? "league-demo.json" : "league.json"
+);
+
+function onNetlify(): boolean {
+  return Boolean(process.env.NETLIFY || process.env.NETLIFY_BLOBS_CONTEXT);
+}
+
+let cache: LeagueData | null = null;
+let loading: Promise<LeagueData> | null = null;
+let writeChain: Promise<void> = Promise.resolve();
+
+async function readPersisted(): Promise<LeagueData | null> {
+  if (onNetlify()) {
+    const store = getStore({ name: BLOB_STORE, consistency: "strong" });
+    return ((await store.get(BLOB_KEY, { type: "json" })) as LeagueData | null) ?? null;
   }
-
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-
-  initSchema(db);
-  seedIfEmpty(db);
-
-  dbInstance = db;
-  return db;
-}
-
-export function initSchema(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS players (
-      id TEXT PRIMARY KEY,
-      slug TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      color TEXT NOT NULL,
-      avatar_initials TEXT NOT NULL,
-      joined_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS games (
-      slug TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      short_name TEXT NOT NULL,
-      color TEXT NOT NULL,
-      text_color TEXT NOT NULL,
-      url TEXT NOT NULL,
-      description TEXT NOT NULL,
-      ranking_direction TEXT NOT NULL,
-      unit TEXT NOT NULL,
-      min_submissions INTEGER NOT NULL DEFAULT 4,
-      axis_start REAL
-    );
-
-    CREATE TABLE IF NOT EXISTS submissions (
-      id TEXT PRIMARY KEY,
-      player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      game_slug TEXT NOT NULL REFERENCES games(slug) ON DELETE CASCADE,
-      league_date TEXT NOT NULL,
-      puzzle_id TEXT,
-      raw_text TEXT NOT NULL,
-      primary_value REAL NOT NULL,
-      secondary_value REAL,
-      tertiary_value REAL,
-      display_result TEXT NOT NULL,
-      failed INTEGER NOT NULL DEFAULT 0,
-      metadata_json TEXT NOT NULL DEFAULT '{}',
-      submitted_at TEXT NOT NULL,
-      is_late INTEGER NOT NULL DEFAULT 0,
-      is_corrected INTEGER NOT NULL DEFAULT 0,
-      UNIQUE(player_id, game_slug, league_date)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_submissions_date ON submissions(league_date);
-    CREATE INDEX IF NOT EXISTS idx_submissions_game_date ON submissions(game_slug, league_date);
-    CREATE INDEX IF NOT EXISTS idx_submissions_player ON submissions(player_id);
-  `);
-}
-
-function seedIfEmpty(db: Database.Database): void {
-  const insertGame = db.prepare(`
-    INSERT INTO games (
-      slug, name, short_name, color, text_color, url, description, ranking_direction, unit, min_submissions, axis_start
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(slug) DO UPDATE SET
-      name = excluded.name,
-      short_name = excluded.short_name,
-      color = excluded.color,
-      text_color = excluded.text_color,
-      url = excluded.url,
-      description = excluded.description,
-      ranking_direction = excluded.ranking_direction,
-      unit = excluded.unit,
-      min_submissions = excluded.min_submissions,
-      axis_start = excluded.axis_start
-  `);
-
-  const seedGamesTx = db.transaction(() => {
-    for (const g of Object.values(GAMES)) {
-      insertGame.run(
-        g.slug,
-        g.name,
-        g.shortName,
-        g.color,
-        g.textColor,
-        g.url,
-        g.description,
-        g.rankingDirection,
-        g.unit,
-        g.minSubmissions,
-        g.axisStart ?? null
-      );
-    }
-  });
-  seedGamesTx();
-
-  const playerCount = (
-    db.prepare("SELECT COUNT(*) as count FROM players").get() as { count: number }
-  ).count;
-
-  if (playerCount === 0) {
-    seedInitialDataset(db);
+  try {
+    return JSON.parse(fs.readFileSync(LOCAL_FILE, "utf8")) as LeagueData;
+  } catch {
+    return null;
   }
 }
 
-export function seedInitialDataset(db: Database.Database): void {
-  const insertPlayer = db.prepare(`
-    INSERT OR IGNORE INTO players (id, slug, name, color, avatar_initials, joined_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+async function writePersisted(data: LeagueData): Promise<void> {
+  if (onNetlify()) {
+    const store = getStore({ name: BLOB_STORE, consistency: "strong" });
+    await store.setJSON(BLOB_KEY, data);
+    return;
+  }
+  fs.mkdirSync(path.dirname(LOCAL_FILE), { recursive: true });
+  fs.writeFileSync(LOCAL_FILE, JSON.stringify(data));
+}
 
-  const insertSubmission = db.prepare(`
-    INSERT OR REPLACE INTO submissions (
-      id, player_id, game_slug, league_date, puzzle_id, raw_text,
-      primary_value, secondary_value, tertiary_value, display_result,
-      failed, metadata_json, submitted_at, is_late, is_corrected
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+async function load(): Promise<LeagueData> {
+  if (cache) return cache;
+  if (!loading) {
+    loading = (async () => {
+      let data = await readPersisted();
+      if (!data) {
+        data = isDemoMode() ? buildDemoDataset() : { players: [], submissions: [] };
+        await writePersisted(data);
+      }
+      cache = data;
+      return data;
+    })().finally(() => {
+      loading = null;
+    });
+  }
+  return loading;
+}
 
-  // Seed 35 days of realistic, internally consistent league history up to 2026-11-14
-  // so every chart, bump chart, activity calendar, player record, and game distribution
-  // is backed by real database records.
-  const tx = db.transaction(() => {
-    for (const p of DEFAULT_PLAYERS) {
-      insertPlayer.run(p.id, p.slug, p.name, p.color, p.avatarInitials, p.joinedAt);
-    }
+/** Serialise writes so concurrent requests can't clobber each other. */
+function persist(data: LeagueData): Promise<void> {
+  writeChain = writeChain.then(() => writePersisted(data));
+  return writeChain;
+}
+
+function buildDemoDataset(): LeagueData {
+  const players: Player[] = [];
+  const submissions: Submission[] = [];
+  {
+    players.push(...DEFAULT_PLAYERS);
 
     // Generate dates from 2026-10-12 to 2026-11-14 (34 days)
     const start = new Date("2026-10-12T12:00:00Z");
@@ -219,31 +174,14 @@ export function seedInitialDataset(db: Database.Database): void {
             seedVal
           );
 
-          insertSubmission.run(
-            generated.id,
-            generated.playerId,
-            generated.gameSlug,
-            generated.leagueDate,
-            generated.puzzleId,
-            generated.rawText,
-            generated.primaryValue,
-            generated.secondaryValue,
-            generated.tertiaryValue,
-            generated.displayResult,
-            generated.failed ? 1 : 0,
-            generated.metadataJson,
-            generated.submittedAt,
-            generated.isLate ? 1 : 0,
-            generated.isCorrected ? 1 : 0
-          );
+          submissions.push(generated);
         }
       }
 
       dayIdx++;
     }
-  });
-
-  tx();
+  }
+  return { players, submissions };
 }
 
 function buildDeterministicSubmission(
@@ -579,155 +517,104 @@ function buildDeterministicSubmission(
   }
 }
 
-export function getAllPlayers(db = getDb()): Player[] {
-  const rows = db
-    .prepare(
-      `SELECT id, slug, name, color, avatar_initials as avatarInitials, joined_at as joinedAt
-       FROM players ORDER BY rowid ASC`
-    )
-    .all() as Player[];
-  return rows;
+export async function getAllPlayers(): Promise<Player[]> {
+  return (await load()).players;
 }
 
-export function getSubmissionsInRange(
+export async function getSubmissionsInRange(
   startDate: string,
-  endDate: string,
-  db = getDb()
-): Submission[] {
-  const rows = db
-    .prepare(
-      `SELECT
-        id,
-        player_id as playerId,
-        game_slug as gameSlug,
-        league_date as leagueDate,
-        puzzle_id as puzzleId,
-        raw_text as rawText,
-        primary_value as primaryValue,
-        secondary_value as secondaryValue,
-        tertiary_value as tertiaryValue,
-        display_result as displayResult,
-        failed,
-        metadata_json as metadataJson,
-        submitted_at as submittedAt,
-        is_late as isLate,
-        is_corrected as isCorrected
-       FROM submissions
-       WHERE league_date >= ? AND league_date <= ?
-       ORDER BY league_date ASC, submitted_at ASC`
-    )
-    .all(startDate, endDate) as Array<
-    Omit<Submission, "failed" | "isLate" | "isCorrected"> & {
-      failed: number;
-      isLate: number;
-      isCorrected: number;
-    }
-  >;
-
-  return rows.map((r) => ({
-    ...r,
-    failed: Boolean(r.failed),
-    isLate: Boolean(r.isLate),
-    isCorrected: Boolean(r.isCorrected),
-  }));
+  endDate: string
+): Promise<Submission[]> {
+  const { submissions } = await load();
+  return submissions
+    .filter((s) => s.leagueDate >= startDate && s.leagueDate <= endDate)
+    .sort(
+      (a, b) =>
+        a.leagueDate.localeCompare(b.leagueDate) || a.submittedAt.localeCompare(b.submittedAt)
+    );
 }
 
-export function upsertSubmission(
-  sub: Omit<Submission, "id" | "submittedAt"> & { id?: string; submittedAt?: string },
-  db = getDb()
-): Submission {
-  const existing = db
-    .prepare(
-      `SELECT id FROM submissions WHERE player_id = ? AND game_slug = ? AND league_date = ?`
-    )
-    .get(sub.playerId, sub.gameSlug, sub.leagueDate) as { id: string } | undefined;
-
-  const id = existing?.id || sub.id || `sub_${sub.leagueDate}_${sub.gameSlug}_${sub.playerId}`;
-  const submittedAt = sub.submittedAt || new Date().toISOString();
-  const isCorrected = existing ? true : sub.isCorrected;
-
-  db.prepare(
-    `INSERT OR REPLACE INTO submissions (
-      id, player_id, game_slug, league_date, puzzle_id, raw_text,
-      primary_value, secondary_value, tertiary_value, display_result,
-      failed, metadata_json, submitted_at, is_late, is_corrected
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    id,
-    sub.playerId,
-    sub.gameSlug,
-    sub.leagueDate,
-    sub.puzzleId,
-    sub.rawText,
-    sub.primaryValue,
-    sub.secondaryValue,
-    sub.tertiaryValue,
-    sub.displayResult,
-    sub.failed ? 1 : 0,
-    sub.metadataJson,
-    submittedAt,
-    sub.isLate ? 1 : 0,
-    isCorrected ? 1 : 0
+export async function upsertSubmission(
+  sub: Omit<Submission, "id" | "submittedAt"> & { id?: string; submittedAt?: string }
+): Promise<Submission> {
+  const data = await load();
+  const existing = data.submissions.find(
+    (s) =>
+      s.playerId === sub.playerId && s.gameSlug === sub.gameSlug && s.leagueDate === sub.leagueDate
   );
-
-  return {
+  const saved: Submission = {
     ...sub,
-    id,
-    submittedAt,
-    isCorrected,
+    id: existing?.id || sub.id || `sub_${sub.leagueDate}_${sub.gameSlug}_${sub.playerId}`,
+    submittedAt: sub.submittedAt || new Date().toISOString(),
+    isCorrected: existing ? true : sub.isCorrected,
   };
+  if (existing) Object.assign(existing, saved);
+  else data.submissions.push(saved);
+  await persist(data);
+  return saved;
 }
 
-export function createPlayer(
+export async function upsertSubmissions(
+  subs: Array<Omit<Submission, "id" | "submittedAt">>
+): Promise<Submission[]> {
+  const data = await load();
+  const out: Submission[] = [];
+  for (const sub of subs) {
+    const existing = data.submissions.find(
+      (s) =>
+        s.playerId === sub.playerId &&
+        s.gameSlug === sub.gameSlug &&
+        s.leagueDate === sub.leagueDate
+    );
+    const saved: Submission = {
+      ...sub,
+      id: existing?.id || `sub_${sub.leagueDate}_${sub.gameSlug}_${sub.playerId}`,
+      submittedAt: new Date().toISOString(),
+      isCorrected: existing ? true : sub.isCorrected,
+    };
+    if (existing) Object.assign(existing, saved);
+    else data.submissions.push(saved);
+    out.push(saved);
+  }
+  await persist(data);
+  return out;
+}
+
+const PALETTE = [
+  "#E6EB5E",
+  "#FF8A3D",
+  "#E3CDBE",
+  "#6FA8DC",
+  "#8A8C45",
+  "#F2A7C3",
+  "#5CC8B0",
+  "#B388FF",
+  "#B8794F",
+];
+
+export async function createPlayer(
   name: string,
   color?: string,
-  joinedAt = "2026-11-14",
-  db = getDb()
-): Player {
+  joinedAt: string = getTodayDate()
+): Promise<Player> {
+  const data = await load();
   const cleanName = name.trim();
   const slug = cleanName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  const existing = db.prepare(`SELECT * FROM players WHERE slug = ?`).get(slug) as
-    | {
-        id: string;
-        slug: string;
-        name: string;
-        color: string;
-        avatar_initials: string;
-        joined_at: string;
-      }
-    | undefined;
+  const existing = data.players.find((p) => p.slug === slug);
+  if (existing) return existing;
 
-  if (existing) {
-    return {
-      id: existing.id,
-      slug: existing.slug,
-      name: existing.name,
-      color: existing.color,
-      avatarInitials: existing.avatar_initials,
-      joinedAt: existing.joined_at,
-    };
-  }
-
-  const palette = ["#E6EB5E", "#FF8A3D", "#E3CDBE", "#6FA8DC", "#8A8C45", "#F2A7C3", "#5CC8B0", "#B388FF"];
-  const count = (db.prepare(`SELECT COUNT(*) as c FROM players`).get() as { c: number }).c;
-  const chosenColor = color || palette[count % palette.length];
-  const id = `p_${slug}_${Date.now().toString(36)}`;
-  const avatarInitials = cleanName.slice(0, 1).toUpperCase();
-
-  db.prepare(
-    `INSERT INTO players (id, slug, name, color, avatar_initials, joined_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(id, slug, cleanName, chosenColor, avatarInitials, joinedAt);
-
-  return {
-    id,
+  const player: Player = {
+    id: `p_${slug}_${Date.now().toString(36)}`,
     slug,
     name: cleanName,
-    color: chosenColor,
-    avatarInitials,
+    color: color || PALETTE[data.players.length % PALETTE.length],
+    avatarInitials: cleanName.slice(0, 1).toUpperCase(),
     joinedAt,
   };
+  data.players.push(player);
+  await persist(data);
+  return player;
 }

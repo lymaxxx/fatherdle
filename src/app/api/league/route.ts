@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createPlayer,
   getAllPlayers,
-  getDb,
   getSubmissionsInRange,
-  upsertSubmission,
+  getTodayDate,
+  upsertSubmissions,
 } from "@/lib/db";
-import { resolveDatePeriod } from "@/lib/analytics/dates";
+import { addDays, resolveDatePeriod } from "@/lib/analytics/dates";
 import {
   calculateActivityCalendar,
   calculateAllDailyStandings,
@@ -22,26 +22,23 @@ import { GameSlug, PeriodPreset } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_TODAY = "2026-11-14";
-
 export async function GET(req: NextRequest) {
   try {
-    const db = getDb();
     const { searchParams } = new URL(req.url);
 
     const preset = (searchParams.get("preset") as PeriodPreset) || "week";
     const customStart = searchParams.get("start") || undefined;
     const customEnd = searchParams.get("end") || undefined;
-    const activePlayerId = searchParams.get("playerId") || "p_alex";
+    const activePlayerId = searchParams.get("playerId") || "";
     const selectedGameSlug = (searchParams.get("gameSlug") as GameSlug) || "maptap";
-    const todayDate = searchParams.get("today") || DEFAULT_TODAY;
+    const todayDate = getTodayDate();
 
-    const players = getAllPlayers(db);
+    const players = await getAllPlayers();
     // Load all submissions from earliest date to todayDate for complete calculations
-    const allSubmissions = getSubmissionsInRange("2026-01-01", todayDate, db);
+    const allSubmissions = await getSubmissionsInRange("2000-01-01", todayDate);
 
     const earliestDate =
-      allSubmissions.length > 0 ? allSubmissions[0].leagueDate : "2026-10-12";
+      allSubmissions.length > 0 ? allSubmissions[0].leagueDate : todayDate;
 
     const period = resolveDatePeriod(
       preset,
@@ -90,7 +87,7 @@ export async function GET(req: NextRequest) {
     );
 
     // 3. Activity calendar (always show 35 days ending on todayDate so the 7x5 / 12-col grid is rich)
-    const calendarStart = "2026-10-11";
+    const calendarStart = addDays(todayDate, -34);
     const activityCalendar = calculateActivityCalendar(
       calendarStart,
       todayDate,
@@ -100,10 +97,15 @@ export async function GET(req: NextRequest) {
     );
 
     // 4. Active player profile analytics
-    const targetPlayer =
-      players.find((p) => p.id === activePlayerId || p.slug === activePlayerId) ||
-      players[1] ||
-      players[0];
+    const targetPlayer = players.find((p) => p.id === activePlayerId || p.slug === activePlayerId) ||
+      players[0] || {
+        id: "none",
+        slug: "none",
+        name: "Player",
+        color: "#948F84",
+        avatarInitials: "?",
+        joinedAt: todayDate,
+      };
 
     const playerProfile = calculatePlayerProfileAnalytics(
       targetPlayer.id,
@@ -182,7 +184,6 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const db = getDb();
     const body = await req.json();
 
     if (body.action === "join") {
@@ -190,14 +191,17 @@ export async function POST(req: NextRequest) {
       if (!name) {
         return NextResponse.json({ error: "Name is required." }, { status: 400 });
       }
-      const player = createPlayer(name, body.color, body.joinedAt || DEFAULT_TODAY, db);
+      const player = await createPlayer(name, body.color, body.joinedAt || getTodayDate());
       return NextResponse.json({ player });
     }
 
     if (body.action === "paste") {
-      const playerId = String(body.playerId || "p_alex");
+      const playerId = String(body.playerId || "");
+      if (!playerId) {
+        return NextResponse.json({ error: "Choose who is submitting." }, { status: 400 });
+      }
       const rawPaste = String(body.rawPaste || "");
-      const targetDate = String(body.leagueDate || DEFAULT_TODAY);
+      const targetDate = String(body.leagueDate || getTodayDate());
       const isLate = Boolean(body.isLate);
 
       const { parsed, unrecognisedBlocks } = parseMultiGamePaste(rawPaste);
@@ -212,29 +216,23 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const saved = [];
-      for (const item of parsed) {
-        const leagueDate = targetDate || item.extractedDate || DEFAULT_TODAY;
-        const sub = upsertSubmission(
-          {
-            playerId,
-            gameSlug: item.gameSlug,
-            leagueDate,
-            puzzleId: item.puzzleId,
-            rawText: item.rawText,
-            primaryValue: item.primaryValue,
-            secondaryValue: item.secondaryValue,
-            tertiaryValue: item.tertiaryValue,
-            displayResult: item.displayResult,
-            failed: item.failed,
-            metadataJson: JSON.stringify(item.metadata),
-            isLate,
-            isCorrected: false,
-          },
-          db
-        );
-        saved.push(sub);
-      }
+      const saved = await upsertSubmissions(
+        parsed.map((item) => ({
+          playerId,
+          gameSlug: item.gameSlug,
+          leagueDate: targetDate || item.extractedDate || getTodayDate(),
+          puzzleId: item.puzzleId,
+          rawText: item.rawText,
+          primaryValue: item.primaryValue,
+          secondaryValue: item.secondaryValue,
+          tertiaryValue: item.tertiaryValue,
+          displayResult: item.displayResult,
+          failed: item.failed,
+          metadataJson: JSON.stringify(item.metadata),
+          isLate,
+          isCorrected: false,
+        }))
+      );
 
       return NextResponse.json({
         savedCount: saved.length,

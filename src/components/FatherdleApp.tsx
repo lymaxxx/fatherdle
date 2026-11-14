@@ -102,11 +102,11 @@ export function FatherdleApp({
 } = {}) {
   const [activeTab, setActiveTab] = useState<NavTab>(initialTab ?? "statistics");
   const [preset, setPreset] = useState<PeriodPreset>("week");
-  const [customStart, setCustomStart] = useState("2026-11-01");
-  const [customEnd, setCustomEnd] = useState("2026-11-14");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
-  const [currentUserId, setCurrentUserId] = useState("p_alex");
-  const [viewedPlayerId, setViewedPlayerId] = useState("p_alex");
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [viewedPlayerId, setViewedPlayerId] = useState("");
   const [selectedGameSlug, setSelectedGameSlug] = useState<GameSlug>(initialGameSlug ?? "maptap");
   const [hasJoined, setHasJoined] = useState(false);
   const [identityChecked, setIdentityChecked] = useState(false);
@@ -118,9 +118,9 @@ export function FatherdleApp({
   const [pointsChartMode, setPointsChartMode] = useState<"cumulative" | "daily">("cumulative");
   const [breakdownMode, setBreakdownMode] = useState<"by_player" | "by_game">("by_player");
   const [calendarMetric, setCalendarMetric] = useState<"submissions" | "players" | "points">("submissions");
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState("2026-11-13");
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [visiblePlayerIds, setVisiblePlayerIds] = useState<string[]>([]);
-  const [comparedPlayerIds, setComparedPlayerIds] = useState<string[]>(["p_chris", "p_alex"]);
+  const [comparedPlayerIds, setComparedPlayerIds] = useState<string[]>([]);
 
   // Modals
   const [isPasteOpen, setIsPasteOpen] = useState(false);
@@ -136,7 +136,7 @@ export function FatherdleApp({
         playerId: viewedPlayerId,
         gameSlug: selectedGameSlug,
       });
-      if (preset === "custom") {
+      if (preset === "custom" && customStart && customEnd) {
         params.set("start", customStart);
         params.set("end", customEnd);
       }
@@ -157,6 +157,15 @@ export function FatherdleApp({
     fetchLeagueData();
   }, [fetchLeagueData]);
 
+  // Fill date and comparison defaults from the server's idea of "today".
+  useEffect(() => {
+    if (!data) return;
+    setCustomEnd((v) => v || data.todayDate);
+    setCustomStart((v) => v || data.period.startDate);
+    setSelectedCalendarDate((v) => v || data.todayDate);
+    setComparedPlayerIds((v) => (v.length ? v : data.players.slice(0, 2).map((p) => p.id)));
+  }, [data]);
+
   // Restore identity from this browser; first-time visitors land on onboarding.
   useEffect(() => {
     if (!data || identityChecked) return;
@@ -170,6 +179,13 @@ export function FatherdleApp({
     }
     setIdentityChecked(true);
   }, [data, identityChecked, initialTab]);
+
+  // An empty league has nothing to show yet; keep people on the join screen.
+  useEffect(() => {
+    if (data && data.players.length === 0 && activeTab !== "onboarding") {
+      setActiveTab("onboarding");
+    }
+  }, [data, activeTab]);
 
   // Keep the URL in step with the Games tab (/games/[slug]).
   useEffect(() => {
@@ -228,7 +244,7 @@ export function FatherdleApp({
 
   const currentUserPlayer = useMemo(() => {
     if (!data) return null;
-    return data.players.find((p) => p.id === currentUserId) || data.players[1] || data.players[0];
+    return data.players.find((p) => p.id === currentUserId) || data.players[0] || null;
   }, [data, currentUserId]);
 
   const currentUserStandingRow = useMemo(() => {

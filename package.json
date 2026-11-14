@@ -7,17 +7,18 @@
     "build": "next build",
     "start": "next start -p 3005",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:demo": "FATHERDLE_DEMO=1 next dev -p 3005",
+    "start:demo": "FATHERDLE_DEMO=1 next start -p 3005"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
+    "@netlify/blobs": "^11.1.9",
     "lucide-react": "^0.475.0",
     "next": "^15.1.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
@@ -26,5 +27,8 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
