@@ -495,18 +495,26 @@ export function parseWordishingrilliontapdle(block: string): ParsedGameSubmissio
   let multiplier = 1.0;
   let failed = false;
 
-  if (statsMatch) {
-    const rawAttempt = statsMatch[1].toUpperCase();
-    maxAttempts = parseInt(statsMatch[2], 10);
+  // Newer share format:
+  //   "Found it in 2/6 · 15,023 points (rarity ×1.40)"
+  //   "Didn't find it (X/6) · 6,018 points (rarity ×1.30)"
+  const longMatch = block.match(
+    /(?:found it in\s+|didn'?t find it\s*\()([1-6X])\/(\d+)\)?\s*[·•-]\s*([\d,]+)\s*(?:pts?|points?)(?:\s*\(?\s*(?:rarity\s*)?[×x](\d+(?:\.\d+)?)\s*\)?)?/i
+  );
+  const stats = statsMatch || longMatch;
+
+  if (stats) {
+    const rawAttempt = stats[1].toUpperCase();
+    maxAttempts = parseInt(stats[2], 10);
     failed = rawAttempt === "X";
     attempts = failed ? maxAttempts + 1 : parseInt(rawAttempt, 10);
     attemptStr = `${rawAttempt}/${maxAttempts}`;
-    points = parseInt(statsMatch[3].replace(/,/g, ""), 10);
-    if (statsMatch[4]) {
-      multiplier = parseFloat(statsMatch[4]);
+    points = parseInt(stats[3].replace(/,/g, ""), 10);
+    if (stats[4]) {
+      multiplier = parseFloat(stats[4]);
     }
   } else {
-    const fallbackPts = block.match(/([\d,]+)\s*pts/i);
+    const fallbackPts = block.match(/([\d,]+)\s*(?:pts|points)/i);
     if (!fallbackPts) return null;
     points = parseInt(fallbackPts[1].replace(/,/g, ""), 10);
   }

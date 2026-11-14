@@ -151,7 +151,13 @@ export function FatherdleApp({
       const res = await fetch(`/api/league?${params.toString()}`, { signal: ctrl.signal }).finally(
         () => clearTimeout(timer)
       );
-      const json = (await res.json()) as LeagueApiResponse & { error?: string };
+      const raw = await res.text();
+      let json: LeagueApiResponse & { error?: string };
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        throw new Error(`Server replied ${res.status}: ${raw.replace(/\s+/g, " ").slice(0, 160)}`);
+      }
       if (!res.ok || json.error || !json.players) {
         throw new Error(json.error || `Server returned ${res.status}`);
       }

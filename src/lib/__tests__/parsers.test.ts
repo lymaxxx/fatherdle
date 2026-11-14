@@ -268,3 +268,29 @@ WORDISHINGRILLIONTAPDLE #5
     ]);
   });
 });
+
+describe("Wordishingrilliontapdle newer share formats", () => {
+  it("parses 'Found it in N/6 · X points (rarity ×Y)'", () => {
+    const r = parseWordishingrilliontapdle(`WORDISHINGRILLIONTAPDLE #4
+Found it in 3/6 · 8,808 points (rarity ×1.00)
+
+1. 🟨⬛⬛⬛🟨⬛⬛⬛
+    ⚪ Common · 🐟 3 shared categories · 📍 1,000–2,000 km
+2. 🎯 Found it · 📍 under 250 km`);
+    expect(r?.primaryValue).toBe(8808);
+    expect(r?.failed).toBe(false);
+    expect(r?.metadata.attempts).toBe(3);
+    expect(r?.tertiaryValue).toBe(1);
+  });
+
+  it("parses a failed attempt in the newer format", () => {
+    const r = parseWordishingrilliontapdle(`WORDISHINGRILLIONTAPDLE #2
+Didn't find it (X/6) · 6,018 points (rarity ×1.30)
+
+1. ⬛⬛⬛🟨⬛🟨🟨⬛
+    🔵 Familiar · 🐟 2 shared categories · 📍 500–1,000 km`);
+    expect(r?.primaryValue).toBe(6018);
+    expect(r?.failed).toBe(true);
+    expect(r?.tertiaryValue).toBe(1.3);
+  });
+});

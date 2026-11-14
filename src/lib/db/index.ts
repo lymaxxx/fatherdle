@@ -69,10 +69,31 @@ function blobStore() {
     : getStore({ name: BLOB_STORE, consistency: "strong" });
 }
 
+/** Fail with a readable message instead of hanging until the platform kills the request. */
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms);
+    work.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
 async function readPersisted(): Promise<LeagueData | null> {
   if (onNetlify()) {
     const store = blobStore();
-    return ((await store.get(BLOB_KEY, { type: "json" })) as LeagueData | null) ?? null;
+    return (
+      ((await withTimeout(store.get(BLOB_KEY, { type: "json" }), 6000, "Netlify Blobs read")) as
+        | LeagueData
+        | null) ?? null
+    );
   }
   try {
     return JSON.parse(fs.readFileSync(LOCAL_FILE, "utf8")) as LeagueData;
@@ -84,7 +105,7 @@ async function readPersisted(): Promise<LeagueData | null> {
 async function writePersisted(data: LeagueData): Promise<void> {
   if (onNetlify()) {
     const store = blobStore();
-    await store.setJSON(BLOB_KEY, data);
+    await withTimeout(store.setJSON(BLOB_KEY, data), 6000, "Netlify Blobs write");
     return;
   }
   fs.mkdirSync(path.dirname(LOCAL_FILE), { recursive: true });
