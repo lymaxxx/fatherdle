@@ -3,6 +3,7 @@ import {
   createPlayer,
   getAllPlayers,
   getSubmissionsInRange,
+  importQuizboisSeed,
   getTodayDate,
   upsertSubmissions,
 } from "@/lib/db";
@@ -193,6 +194,10 @@ export async function POST(req: NextRequest) {
       }
       const player = await createPlayer(name, body.color, body.joinedAt || getTodayDate());
       return NextResponse.json({ player });
+    }
+
+    if (body.action === "import-quizbois") {
+      return NextResponse.json(await importQuizboisSeed());
     }
 
     if (body.action === "paste") {

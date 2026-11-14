@@ -4,6 +4,8 @@ import path from "path";
 import { DEFAULT_PLAYERS } from "../constants";
 import { getLondonDateString } from "../analytics/dates";
 import { GameSlug, Player, Submission } from "../types";
+import { parseMultiGamePaste } from "../parsers";
+import quizboisSeed from "../seed/quizbois-seed.json";
 
 /**
  * Storage layer.
@@ -133,8 +135,13 @@ async function load(forWrite = false): Promise<LeagueData> {
   if (!loading) {
     loading = (async () => {
       let data = await readPersisted();
-      if (!data) {
-        data = isDemoMode() ? buildDemoDataset() : { players: [], submissions: [] };
+      const empty = !data || (data.players.length === 0 && data.submissions.length === 0);
+      if (!data || (empty && !isDemoMode() && seedEnabled())) {
+        data = isDemoMode()
+          ? buildDemoDataset()
+          : seedEnabled()
+          ? mergeQuizboisSeed({ players: [], submissions: [] })
+          : { players: [], submissions: [] };
         await writePersisted(data);
       }
       cache = data;
@@ -154,6 +161,66 @@ function persist(data: LeagueData): Promise<void> {
     cachedAt = Date.now();
   });
   return writeChain;
+}
+
+const SEED_PALETTE = ["#E6EB5E", "#FF8A3D", "#E3CDBE", "#6FA8DC", "#8A8C45", "#F2A7C3", "#5CC8B0", "#B388FF", "#B8794F"];
+
+function seedEnabled(): boolean {
+  return process.env.FATHERDLE_SEED !== "none";
+}
+
+/**
+ * Merges the Quizbois chat history (9-14 Nov 2026) into a league document: adds missing players by
+ * first name and upserts every parsed result. Safe to run more than once.
+ */
+export function mergeQuizboisSeed(data: LeagueData): LeagueData {
+  const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  for (const sp of quizboisSeed.players) {
+    if (!data.players.some((p) => p.slug === slugOf(sp.name))) {
+      data.players.push({
+        id: `p_${slugOf(sp.name)}`,
+        slug: slugOf(sp.name),
+        name: sp.name,
+        color: SEED_PALETTE[data.players.length % SEED_PALETTE.length],
+        avatarInitials: sp.name.slice(0, 1).toUpperCase(),
+        joinedAt: sp.joinedAt,
+      });
+    }
+  }
+  for (const entry of quizboisSeed.entries) {
+    const player = data.players.find((p) => p.slug === slugOf(entry.player));
+    if (!player) continue;
+    for (const item of parseMultiGamePaste(entry.text).parsed) {
+      const id = `sub_${entry.date}_${item.gameSlug}_${player.id}`;
+      const sub: Submission = {
+        id,
+        playerId: player.id,
+        gameSlug: item.gameSlug,
+        leagueDate: entry.date,
+        puzzleId: item.puzzleId,
+        rawText: item.rawText,
+        primaryValue: item.primaryValue,
+        secondaryValue: item.secondaryValue,
+        tertiaryValue: item.tertiaryValue,
+        displayResult: item.displayResult,
+        failed: item.failed,
+        metadataJson: JSON.stringify(item.metadata),
+        submittedAt: `${entry.date}T12:00:00.000Z`,
+        isLate: false,
+        isCorrected: false,
+      };
+      const i = data.submissions.findIndex((x) => x.id === id);
+      if (i >= 0) data.submissions[i] = sub;
+      else data.submissions.push(sub);
+    }
+  }
+  return data;
+}
+
+export async function importQuizboisSeed(): Promise<{ players: number; submissions: number }> {
+  const data = mergeQuizboisSeed(await load(true));
+  await persist(data);
+  return { players: data.players.length, submissions: data.submissions.length };
 }
 
 function buildDemoDataset(): LeagueData {
