@@ -147,7 +147,7 @@ export interface FeedLeadItem {
 
 export type FeedItem = FeedResultItem | FeedLeadItem;
 
-const TILE = /^[⬛⬜🟨🟩🟥🟦🟪🟧🟫]+$/u;
+const TILE = /^[⬛⬜🟨🟩🟥🟦🟪🟧🟫🔵🟡💡]+$/u;
 
 function gridFrom(raw: string): string[] | null {
   const rows = raw
@@ -218,7 +218,7 @@ export function buildFeed(
       placement: pl?.place ?? null,
       outOf: pl?.outOf ?? 0,
       dayBest: pl?.best ?? null,
-      grid: s.gameSlug === "wordle" ? gridFrom(s.rawText) : null,
+      grid: ["wordle", "connections", "strands"].includes(s.gameSlug) ? gridFrom(s.rawText) : null,
       rounds: s.gameSlug === "maptap" ? roundsFrom(s.rawText) : null,
       order: -n * 2,
     });

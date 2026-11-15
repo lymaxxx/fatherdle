@@ -86,8 +86,23 @@ export function createGameAnalyticsModule(gameSlug: GameSlug): GameAnalyticsModu
 
   const getLeaderboardColumns = (): LeaderboardColumn[] => {
     switch (gameSlug) {
+      case "connections":
+        return [
+          { key: "player", label: "Player", align: "left" },
+          { key: "result", label: "Mistakes", align: "right" },
+          { key: "place", label: "Place", align: "right" },
+          { key: "points", label: "Points", align: "right" },
+        ];
+      case "strands":
+        return [
+          { key: "player", label: "Player", align: "left" },
+          { key: "result", label: "Hints", align: "right" },
+          { key: "place", label: "Place", align: "right" },
+          { key: "points", label: "Points", align: "right" },
+        ];
       case "wordle":
       case "flagle":
+      case "metrodle":
         return [
           { key: "player", label: "Player", align: "left" },
           { key: "result", label: "Attempts", align: "right" },
@@ -131,8 +146,30 @@ export function createGameAnalyticsModule(gameSlug: GameSlug): GameAnalyticsModu
     const gameSubs = submissions.filter((s) => s.gameSlug === gameSlug);
 
     switch (gameSlug) {
+      case "connections": {
+        const counts = [
+          { label: "Perfect", count: gameSubs.filter((s) => !s.failed && s.primaryValue === 0).length },
+          { label: "1 mistake", count: gameSubs.filter((s) => !s.failed && s.primaryValue === 1).length },
+          { label: "2 mistakes", count: gameSubs.filter((s) => !s.failed && s.primaryValue === 2).length },
+          { label: "3 mistakes", count: gameSubs.filter((s) => !s.failed && s.primaryValue >= 3).length },
+          { label: "Failed", count: gameSubs.filter((s) => s.failed).length },
+        ];
+        return { title: "Mistakes distribution", buckets: markPeakBuckets(counts) };
+      }
+
+      case "strands": {
+        const counts = [
+          { label: "No hints", count: gameSubs.filter((s) => s.primaryValue === 0).length },
+          { label: "1 hint", count: gameSubs.filter((s) => s.primaryValue === 1).length },
+          { label: "2 hints", count: gameSubs.filter((s) => s.primaryValue === 2).length },
+          { label: "3+ hints", count: gameSubs.filter((s) => s.primaryValue >= 3).length },
+        ];
+        return { title: "Hints distribution", buckets: markPeakBuckets(counts) };
+      }
+
       case "wordle":
-      case "flagle": {
+      case "flagle":
+      case "metrodle": {
         const categories = ["1", "2", "3", "4", "5", "6", "X"];
         const counts = categories.map((cat) => {
           const c = gameSubs.filter((s) => {
@@ -333,8 +370,12 @@ export function createGameAnalyticsModule(gameSlug: GameSlug): GameAnalyticsModu
       const bestSub = sortedBest[0];
 
       let averageFormatted = `${Math.round(meanRaw)}`;
-      if (gameSlug === "wordle" || gameSlug === "flagle") {
+      if (gameSlug === "wordle" || gameSlug === "flagle" || gameSlug === "metrodle") {
         averageFormatted = `${meanRaw.toFixed(1)}/6`;
+      } else if (gameSlug === "connections") {
+        averageFormatted = `${meanRaw.toFixed(1)} mistakes`;
+      } else if (gameSlug === "strands") {
+        averageFormatted = `${meanRaw.toFixed(1)} hints`;
       } else if (gameSlug === "huedle") {
         averageFormatted = `${Math.round(meanRaw)} moves`;
       } else if (gameSlug === "noillirk") {
@@ -384,8 +425,53 @@ export function createGameAnalyticsModule(gameSlug: GameSlug): GameAnalyticsModu
     const best = sorted[0];
 
     switch (gameSlug) {
+      case "connections": {
+        const solved = gameSubs.filter((s) => !s.failed).length;
+        const perfect = gameSubs.filter((s) => !s.failed && s.primaryValue === 0).length;
+        return [
+          {
+            label: "Perfect games",
+            value: `${perfect}`,
+            subtext: `${perfect} of ${gameSubs.length} with no mistakes`,
+          },
+          {
+            label: "Group solve rate",
+            value: `${Math.round((solved / gameSubs.length) * 100)}%`,
+            subtext: `${solved} of ${gameSubs.length} solved`,
+          },
+          {
+            label: "Best result",
+            value: best ? best.displayResult : "–",
+            subtext: "Fewest mistakes in period",
+          },
+        ];
+      }
+
+      case "strands": {
+        const noHint = gameSubs.filter((s) => s.primaryValue === 0).length;
+        const avgHints = gameSubs.reduce((acc, s) => acc + s.primaryValue, 0) / gameSubs.length;
+        return [
+          {
+            label: "No-hint games",
+            value: `${noHint}`,
+            subtext: `${noHint} of ${gameSubs.length} solved without hints`,
+          },
+          {
+            label: "Average hints",
+            value: avgHints.toFixed(1),
+            subtext: "Across all results in period",
+          },
+          {
+            label: "Best result",
+            value: best ? best.displayResult : "–",
+            subtext: "Fewest hints in period",
+          },
+        ];
+      }
+
       case "wordle":
-      case "flagle": {
+      case "flagle":
+      case "metrodle": {
         const solveCount = gameSubs.filter((s) => !s.failed).length;
         const solvePct = Math.round((solveCount / gameSubs.length) * 100);
         const threesOrBetter = gameSubs.filter((s) => !s.failed && s.primaryValue <= 3).length;
@@ -543,7 +629,7 @@ export function createGameAnalyticsModule(gameSlug: GameSlug): GameAnalyticsModu
     if (allVals.length > 0) {
       const minV = Math.min(...allVals);
       const maxV = Math.max(...allVals);
-      if (gameSlug === "wordle" || gameSlug === "flagle") {
+      if (gameSlug === "wordle" || gameSlug === "flagle" || gameSlug === "metrodle") {
         axisStart = 1;
         axisEnd = 6;
       } else if (gameSlug === "maptap") {

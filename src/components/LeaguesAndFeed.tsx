@@ -307,6 +307,48 @@ function Graphic({ item }: { item: FeedResultItem }) {
       </div>
     );
   }
+  if (slug === "connections" && item.grid) {
+    const colours: Record<string, string> = {
+      "🟨": "#F9DF6D",
+      "🟩": "#A0C35A",
+      "🟦": "#B0C4EF",
+      "🟪": "#BA81C5",
+    };
+    return (
+      <div className="flex flex-col gap-1">
+        {item.grid.map((row, i) => (
+          <div key={i} className="flex gap-1">
+            {Array.from(row).map((c, j) => (
+              <span
+                key={j}
+                style={{ backgroundColor: colours[c] ?? "#fff" }}
+                className="w-[22px] h-[22px] md:w-[26px] md:h-[26px] rounded-[5px] border-[1.5px] border-[#121212]/60"
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (slug === "strands" && item.grid) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {item.grid.map((row, i) => (
+          <div key={i} className="flex gap-1.5">
+            {Array.from(row).map((c, j) =>
+              c === "🟡" ? (
+                <span key={j} className="w-[20px] h-[20px] md:w-[24px] md:h-[24px] rounded-full bg-[#F5D547] border-2 border-[#121212]" />
+              ) : c === "💡" ? (
+                <span key={j} className="w-[20px] h-[20px] md:w-[24px] md:h-[24px] rounded-full border-2 border-[#121212] border-dashed" />
+              ) : (
+                <span key={j} className="w-[20px] h-[20px] md:w-[24px] md:h-[24px] rounded-full bg-[#121212]" />
+              )
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
   if (slug === "catfishing") {
     const filled = Math.round(item.primaryValue);
     return (
@@ -322,7 +364,7 @@ function Graphic({ item }: { item: FeedResultItem }) {
       </div>
     );
   }
-  if (slug === "flagle") {
+  if (slug === "flagle" || slug === "metrodle") {
     const m = item.displayResult.match(/(\d)\s*\/\s*6/);
     const tries = m ? Number(m[1]) : 6;
     const failed = /X/i.test(item.displayResult);

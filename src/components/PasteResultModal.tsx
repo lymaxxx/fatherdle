@@ -6,7 +6,7 @@ import { parseMultiGamePaste } from "@/lib/parsers";
 import { GAMES } from "@/lib/constants";
 import { Player } from "@/lib/types";
 
-const SAMPLE_ALL_9_TEXT = `🎨 Huedle #318
+const SAMPLE_TEXT = `🎨 Huedle #318
 📅 14 Nov 2026
 ⭐ 113 / 1000
 ⏱️ 1:51
@@ -84,7 +84,30 @@ WORDISHINGRILLIONTAPDLE #5
 ⚪ 🐟1 📍500–1k
 
 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
-🟣 🎯 📍250–500`;
+🟣 🎯 📍250–500
+
+-------
+
+Metrodle #1631
+🟩 🎯
+1/6
+#metrodle https://metrodle.com/
+
+-------
+
+Connections
+Puzzle #1252
+🟪🟪🟪🟪
+🟦🟦🟦🟦
+🟩🟩🟩🟩
+🟨🟨🟨🟨
+
+-------
+
+Strands #986
+“Preschool fun”
+🟡🔵🔵🔵
+🔵🔵🔵🔵`;
 
 export function PasteResultModal({
   isOpen,
@@ -224,18 +247,18 @@ export function PasteResultModal({
               </label>
               <button
                 type="button"
-                onClick={() => setRawText(SAMPLE_ALL_9_TEXT)}
+                onClick={() => setRawText(SAMPLE_TEXT)}
                 className="text-[11px] font-bold text-lime hover:underline flex items-center gap-1"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Load all 9 games sample</span>
+                <span>Load sample</span>
               </button>
             </div>
             <textarea
               rows={7}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, or Wordishingrilliontapdle...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
+              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, Wordishingrilliontapdle, Metrodle, Connections, or Strands...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
               className="w-full bg-bg border border-line rounded-2xl p-4 text-[13px] font-mono text-text placeholder:text-muted/60 focus:outline-none focus:border-lime resize-y"
             />
           </div>
@@ -262,8 +285,11 @@ export function PasteResultModal({
                 <strong className="text-text">Huedle</strong>,{" "}
                 <strong className="text-text">Flagle</strong>,{" "}
                 <strong className="text-text">Catfishing</strong>,{" "}
-                <strong className="text-text">Poople</strong>, and{" "}
-                <strong className="text-text">Wordishingrilliontapdle</strong>.
+                <strong className="text-text">Poople</strong>,{" "}
+                <strong className="text-text">Wordishingrilliontapdle</strong>,{" "}
+                <strong className="text-text">Metrodle</strong>,{" "}
+                <strong className="text-text">Connections</strong>, and{" "}
+                <strong className="text-text">Strands</strong>.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

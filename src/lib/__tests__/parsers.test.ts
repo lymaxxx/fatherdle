@@ -10,6 +10,7 @@ import {
   parsePoople,
   parseWordishingrilliontapdle,
   parseMultiGamePaste,
+  parseSingleGameText,
 } from "../parsers";
 
 const SAMPLE_MULTI_PASTE = `
@@ -302,5 +303,102 @@ describe("MapTap rounds", () => {
 Final score: 852`);
     expect((r?.metadata.rounds as Array<{ score: number }>).map((x) => x.score)).toEqual([98, 89, 85, 90, 75]);
     expect(r?.primaryValue).toBe(852);
+  });
+});
+
+describe("Metrodle, Connections and Strands", () => {
+  it("parses Metrodle", () => {
+    const r = parseSingleGameText(`Metrodle #1631
+🟩 🎯
+1/6
+#metrodle https://metrodle.com/`);
+    expect(r?.gameSlug).toBe("metrodle");
+    expect(r?.puzzleId).toBe("#1631");
+    expect(r?.primaryValue).toBe(1);
+    expect(r?.displayResult).toBe("1/6");
+    const slow = parseSingleGameText(`Metrodle #1627
+🟩 2 stops away
+🟩 1 stop away
+🟩 🚇
+3/6
+#metrodle
+https://metrodle.com/`);
+    expect(slow?.primaryValue).toBe(3);
+  });
+
+  it("parses a perfect Connections game", () => {
+    const r = parseSingleGameText(`Connections
+Puzzle #1252
+🟪🟪🟪🟪
+🟦🟦🟦🟦
+🟩🟩🟩🟩
+🟨🟨🟨🟨`);
+    expect(r?.gameSlug).toBe("connections");
+    expect(r?.puzzleId).toBe("#1252");
+    expect(r?.primaryValue).toBe(0);
+    expect(r?.failed).toBe(false);
+    expect(r?.displayResult).toBe("Perfect");
+  });
+
+  it("counts Connections mistakes and ranks a failed game below any solved one", () => {
+    const failed = parseSingleGameText(`Connections
+Puzzle #1248
+🟩🟩🟩🟩
+🟪🟨🟨🟨
+🟨🟨🟨🟨
+🟪🟪🟦🟪
+🟪🟪🟦🟦
+🟪🟪🟦🟦`);
+    expect(failed?.failed).toBe(true);
+    expect(failed?.displayResult).toBe("2/4");
+    const solved = parseSingleGameText(`Connections
+Puzzle #1250
+🟪🟦🟪🟪
+🟪🟪🟪🟪
+🟦🟦🟦🟦
+🟩🟩🟩🟩
+🟨🟨🟨🟨`);
+    expect(solved?.failed).toBe(false);
+    expect(solved?.primaryValue).toBe(1);
+    expect(solved?.displayResult).toBe("1 mistake");
+  });
+
+  it("parses Strands hints and spangram position", () => {
+    const clean = parseSingleGameText(`Strands #986
+“Preschool fun”
+🟡🔵🔵🔵
+🔵🔵🔵🔵`);
+    expect(clean?.gameSlug).toBe("strands");
+    expect(clean?.primaryValue).toBe(0);
+    expect(clean?.displayResult).toBe("No hints");
+    expect(clean?.secondaryValue).toBe(0);
+    const hinted = parseSingleGameText(`Strands #982
+“Influentially online”
+🔵🟡💡🔵
+🔵🔵💡🔵
+🔵`);
+    expect(hinted?.primaryValue).toBe(2);
+    expect(hinted?.displayResult).toBe("2 hints");
+    expect(hinted?.secondaryValue).toBe(1);
+  });
+
+  it("splits all three out of one paste", () => {
+    const { parsed } = parseMultiGamePaste(`Connections
+Puzzle #1252
+🟪🟪🟪🟪
+🟦🟦🟦🟦
+🟩🟩🟩🟩
+🟨🟨🟨🟨
+
+Strands #986
+“Preschool fun”
+🟡🔵🔵🔵
+🔵🔵🔵🔵
+
+Metrodle #1631
+🟩 🎯
+1/6
+#metrodle https://metrodle.com/`);
+    expect(parsed.map((p) => p.gameSlug).sort()).toEqual(["connections", "metrodle", "strands"]);
   });
 });

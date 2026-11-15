@@ -10,6 +10,9 @@ export type GameSlug =
   | "catfishing"
   | "poople"
   | "wordishingrilliontapdle"
+  | "metrodle"
+  | "connections"
+  | "strands"
   | "custom";
 
 export interface GameConfig {

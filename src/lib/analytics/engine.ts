@@ -289,6 +289,9 @@ function computeRawStandingsForWindow(
         catfishing: 0,
         poople: 0,
         wordishingrilliontapdle: 0,
+        metrodle: 0,
+        connections: 0,
+        strands: 0,
         custom: 0,
       },
     });

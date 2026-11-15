@@ -544,6 +544,126 @@ export function parseWordishingrilliontapdle(block: string): ParsedGameSubmissio
   };
 }
 
+/**
+ * Parses Metrodle share text:
+ * Metrodle #1631
+ * 🟩 🎯
+ * 1/6
+ * #metrodle https://metrodle.com/
+ */
+export function parseMetrodle(block: string): ParsedGameSubmission | null {
+  const header = block.match(/Metrodle\s*#?([\d,]+)/i);
+  if (!header) return null;
+  const result = block.match(/(?:^|\s)([1-6X])\s*\/\s*6\b/im);
+  if (!result) return null;
+
+  const attemptStr = result[1].toUpperCase();
+  const failed = attemptStr === "X";
+  const attempts = failed ? 7 : parseInt(attemptStr, 10);
+
+  return {
+    gameSlug: "metrodle",
+    gameName: GAMES.metrodle.name,
+    puzzleId: `#${header[1].replace(/,/g, "")}`,
+    extractedDate: null,
+    primaryValue: attempts,
+    secondaryValue: null,
+    tertiaryValue: null,
+    displayResult: `${attemptStr}/6`,
+    failed,
+    rawText: block.trim(),
+    metadata: { attempts: failed ? null : attempts, attemptStr: `${attemptStr}/6` },
+  };
+}
+
+/**
+ * Parses Connections share text:
+ * Connections
+ * Puzzle #1252
+ * 🟪🟪🟪🟪
+ * 🟦🟦🟦🟦
+ * 🟩🟩🟩🟩
+ * 🟨🟨🟨🟨
+ *
+ * Every row is a guess. A row of one colour is a correct group; any other row is a mistake.
+ * Four mistakes end the game.
+ */
+export function parseConnections(block: string): ParsedGameSubmission | null {
+  if (!/^\s*Connections\b/im.test(block)) return null;
+  const puzzle = block.match(/Puzzle\s*#?([\d,]+)/i);
+  if (!puzzle) return null;
+
+  const rows = block
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /^[🟪🟦🟩🟨]{4}$/u.test(l));
+  if (rows.length === 0) return null;
+
+  const isGroup = (row: string) => new Set(Array.from(row)).size === 1;
+  const groups = rows.filter(isGroup).length;
+  const mistakes = rows.length - groups;
+  const failed = groups < 4;
+
+  return {
+    gameSlug: "connections",
+    gameName: GAMES.connections.name,
+    puzzleId: `#${puzzle[1].replace(/,/g, "")}`,
+    extractedDate: null,
+    // Solved: fewer mistakes is better. Failed games rank below every solved game, and among
+    // them the one with more groups found is better.
+    primaryValue: failed ? 4 - groups : mistakes,
+    secondaryValue: groups,
+    tertiaryValue: null,
+    displayResult: failed
+      ? `${groups}/4`
+      : mistakes === 0
+      ? "Perfect"
+      : `${mistakes} ${mistakes === 1 ? "mistake" : "mistakes"}`,
+    failed,
+    rawText: block.trim(),
+    metadata: { mistakes, groups, guesses: rows.length },
+  };
+}
+
+/**
+ * Parses Strands share text:
+ * Strands #986
+ * “Preschool fun”
+ * 🟡🔵🔵🔵
+ * 🔵🔵🔵🔵
+ *
+ * 🔵 is a word found, 🟡 the spangram, 💡 a hint.
+ */
+export function parseStrands(block: string): ParsedGameSubmission | null {
+  const header = block.match(/Strands\s*#?([\d,]+)/i);
+  if (!header) return null;
+
+  const rows = block
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /^[🔵🟡💡]+$/u.test(l));
+  if (rows.length === 0) return null;
+
+  const dots = Array.from(rows.join(""));
+  const hints = dots.filter((d) => d === "💡").length;
+  const spangramAt = dots.indexOf("🟡");
+  const theme = block.match(/[“"]([^”"\n]+)[”"]/);
+
+  return {
+    gameSlug: "strands",
+    gameName: GAMES.strands.name,
+    puzzleId: `#${header[1].replace(/,/g, "")}`,
+    extractedDate: null,
+    primaryValue: hints,
+    secondaryValue: spangramAt >= 0 ? spangramAt : null,
+    tertiaryValue: null,
+    displayResult: hints === 0 ? "No hints" : `${hints} ${hints === 1 ? "hint" : "hints"}`,
+    failed: false,
+    rawText: block.trim(),
+    metadata: { hints, spangramAt, words: dots.length - hints, theme: theme ? theme[1] : null },
+  };
+}
+
 const SINGLE_BLOCK_PARSERS: Array<(block: string) => ParsedGameSubmission | null> = [
   parseWordishingrilliontapdle,
   parseHuedle,
@@ -554,6 +674,9 @@ const SINGLE_BLOCK_PARSERS: Array<(block: string) => ParsedGameSubmission | null
   parseFlagle,
   parseNoillirk,
   parsePoople,
+  parseMetrodle,
+  parseConnections,
+  parseStrands,
 ];
 
 /**
@@ -593,6 +716,9 @@ export function parseMultiGamePaste(rawInput: string): MultiParseResult {
     { slug: "flagle", regex: /^#?Flagd?le\s*#?\d+/i },
     { slug: "noillirk", regex: /^Noillirk\b/i },
     { slug: "poople", regex: /^Poople\s*#?\d+/i },
+    { slug: "metrodle", regex: /^Metrodle\s*#?\d+/i },
+    { slug: "connections", regex: /^Connections[ \t]*$/im },
+    { slug: "strands", regex: /^Strands\s*#?\d+/i },
   ];
 
   // Clean out pure divider lines (`_____`, `-------`, `(less moves is better)`, etc.)

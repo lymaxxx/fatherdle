@@ -22,6 +22,13 @@ function playerNameSize(name: string): number {
   return Math.min(176, Math.floor(880 / Math.max(1, name.length * 0.6)));
 }
 
+/** Row layout for the player's day card: up to nine roomy rows, tighter single-line rows beyond that. */
+function dayRowLayout(count: number) {
+  const pitch = count <= 9 ? 76 : Math.floor(690 / count);
+  const h = pitch - 8;
+  return { pitch, h, compact: h < 62 };
+}
+
 function formatOrdinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
   const v = n % 100;
@@ -185,29 +192,43 @@ export function ShareCardModal({
       ctx.fillText("Games played", 680, 489);
 
       // Game rows
+      const layout = dayRowLayout(dayRows.length);
       dayRows.forEach((r, i) => {
-        const y = 556 + i * 76;
+        const y = 556 + i * layout.pitch;
+        const { h, compact } = layout;
+        const top = compact ? y + h / 2 : y + h * 0.32;
+        const sub = y + h * 0.76;
         ctx.fillStyle = r.game.color;
         ctx.beginPath();
-        ctx.roundRect(56, y, 968, 68, 16);
+        ctx.roundRect(56, y, 968, h, 16);
         ctx.fill();
 
         ctx.fillStyle = "#121212";
-        ctx.font = `800 26px ${DM}`;
-        ctx.fillText(r.game.name, 80, y + 22);
-        ctx.font = `500 18px ${DM}`;
-        ctx.fillStyle = "rgba(18,18,18,0.7)";
-        ctx.fillText(r.vs, 80, y + 52);
+        ctx.font = `800 ${compact ? 24 : 26}px ${DM}`;
+        ctx.fillText(r.game.name, 80, top);
+        if (!compact) {
+          ctx.font = `500 18px ${DM}`;
+          ctx.fillStyle = "rgba(18,18,18,0.7)";
+          ctx.fillText(r.vs, 80, sub);
+        }
 
         ctx.textAlign = "right";
         ctx.fillStyle = "#121212";
-        ctx.font = `50px ${SERIF}`;
-        ctx.fillText(r.result, 813, y + 34);
-        ctx.font = `800 26px ${DM}`;
-        ctx.fillText(`${formatOrdinal(r.placement)} of ${r.outOf}`, 1000, y + 22);
-        ctx.font = `500 18px ${DM}`;
-        ctx.fillStyle = "rgba(18,18,18,0.7)";
-        ctx.fillText(r.counts ? `+${r.points} pts` : "Pending", 1000, y + 52);
+        ctx.font = `${compact ? 40 : 50}px ${SERIF}`;
+        ctx.fillText(r.result, 813, y + h / 2);
+        ctx.font = `800 ${compact ? 24 : 26}px ${DM}`;
+        ctx.fillText(
+          compact
+            ? `${formatOrdinal(r.placement)} of ${r.outOf} · ${r.counts ? `+${r.points}` : "–"}`
+            : `${formatOrdinal(r.placement)} of ${r.outOf}`,
+          1000,
+          top
+        );
+        if (!compact) {
+          ctx.font = `500 18px ${DM}`;
+          ctx.fillStyle = "rgba(18,18,18,0.7)";
+          ctx.fillText(r.counts ? `+${r.points} pts` : "Pending", 1000, sub);
+        }
         ctx.textAlign = "left";
       });
 
@@ -396,15 +417,18 @@ function DayCard({
         ))}
       </div>
 
-      {rows.map((r, i) => (
+      {rows.map((r, i) => {
+        const layout = dayRowLayout(rows.length);
+        const compact = layout.compact;
+        return (
         <div
           key={r.key}
           style={{
             position: "absolute",
             left: 56,
-            top: 556 + i * 76,
+            top: 556 + i * layout.pitch,
             width: 968,
-            height: 68,
+            height: layout.h,
             borderRadius: 16,
             background: r.game.color,
             display: "flex",
@@ -414,24 +438,30 @@ function DayCard({
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 26, fontWeight: 800, whiteSpace: "nowrap" }}>{r.game.name}</div>
-            <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2, whiteSpace: "nowrap" }}>
-              {r.vs}
-            </div>
+            <div style={{ fontSize: compact ? 24 : 26, fontWeight: 800, whiteSpace: "nowrap" }}>{r.game.name}</div>
+            {!compact && (
+              <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2, whiteSpace: "nowrap" }}>
+                {r.vs}
+              </div>
+            )}
           </div>
-          <div style={{ width: 213, textAlign: "right", fontFamily: SERIF, fontSize: 50, lineHeight: "50px", whiteSpace: "nowrap" }}>
+          <div style={{ width: 213, textAlign: "right", fontFamily: SERIF, fontSize: compact ? 40 : 50, lineHeight: compact ? "40px" : "50px", whiteSpace: "nowrap" }}>
             {r.result}
           </div>
           <div style={{ width: 187, textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 26, fontWeight: 800, whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: compact ? 24 : 26, fontWeight: 800, whiteSpace: "nowrap" }}>
               {formatOrdinal(r.placement)} of {r.outOf}
+              {compact ? ` · ${r.counts ? `+${r.points}` : "–"}` : ""}
             </div>
-            <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2 }}>
-              {r.counts ? `+${r.points} pts` : "Pending"}
-            </div>
+            {!compact && (
+              <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2 }}>
+                {r.counts ? `+${r.points} pts` : "Pending"}
+              </div>
+            )}
           </div>
         </div>
-      ))}
+        );
+      })}
 
       <div style={abs({ left: 56, top: 1252, fontSize: 22, fontWeight: 500, color: "#948F84" })}>
         Pending games count once enough players have submitted.
