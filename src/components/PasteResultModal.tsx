@@ -1,113 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ClipboardPaste, CheckCircle2, AlertCircle, Sparkles, X } from "lucide-react";
+import { ClipboardPaste, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { parseMultiGamePaste } from "@/lib/parsers";
 import { GAMES } from "@/lib/constants";
 import { Player } from "@/lib/types";
-
-const SAMPLE_TEXT = `🎨 Huedle #318
-📅 14 Nov 2026
-⭐ 113 / 1000
-⏱️ 1:51
-🔀 57 moves
-
-https://www.huedle.uk?ref=share
-
-_____
-
-Wordle 1,974 6/6
-
-⬜⬜⬜⬜⬜
-⬜⬜⬜⬜🟩
-⬜⬜🟩⬜🟨
-🟩⬜⬜⬜⬜
-🟩🟩🟩⬜🟩
-🟩🟩🟩🟩🟩
-
--------
-
-Krillion #122 🦐
-330
-
-🦑🦑🐟🐟🐟🦑🦑
-
--------
-
-catfishing.net
-#874 - 4/10
-🐟🐈🐈🐈🐈
-🐟🐟🐟🐟🐟
-
--------
-
-www.maptap.gg November 14
-100🎯 99🔥 99🔥 97🔥 100🎯
-Final score: 988
-
---------
-
-#Flagle #1727 (14.11.2026) 2/6
-🟩🟩🟩
-🟥🟩🟩
-
-https://www.flagle.io/?utm_source=share&utm_medium=native
-
-------
-
-Noillirk 🎈 The Daily Climb · No. 49 · 5,863m
-
-🟥🟨🟦🟨🟥🟦🟥
-
-Climb today's prompts: https://playdaily.org/noillirk
-
--------
-
-Poople #457 7/5
-⬜⬜⬜⬜
-⬜⬜⬜⬜
-🟫⬜⬜⬜
-🟫🟫⬜⬜
-🟫🟫⬜⬜
-🟫🟫⬜⬜
-🟫🟫🟫⬜
-🟫🟫🟫🟫
-
-https://poople.io/
-
--------
-
-WORDISHINGRILLIONTAPDLE #5
-2/6 · 10,857 pts ×1.00
-
-🟩⬛🟨🟨🟩⬛⬜⬜⬜⬜
-⚪ 🐟1 📍500–1k
-
-🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
-🟣 🎯 📍250–500
-
--------
-
-Metrodle #1631
-🟩 🎯
-1/6
-#metrodle https://metrodle.com/
-
--------
-
-Connections
-Puzzle #1252
-🟪🟪🟪🟪
-🟦🟦🟦🟦
-🟩🟩🟩🟩
-🟨🟨🟨🟨
-
--------
-
-Strands #986
-“Preschool fun”
-🟡🔵🔵🔵
-🔵🔵🔵🔵`;
 
 export function PasteResultModal({
   isOpen,
@@ -185,6 +82,21 @@ export function PasteResultModal({
     }
   };
 
+  const pasteFromClipboard = async () => {
+    setErrorMsg(null);
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        setErrorMsg("The clipboard is empty. Copy a result first.");
+        return;
+      }
+      // Several games can be pasted one after another
+      setRawText((prev) => (prev.trim() ? `${prev.trim()}\n\n${text.trim()}` : text.trim()));
+    } catch {
+      setErrorMsg("Couldn't read the clipboard. Tap and hold in the box below and choose Paste.");
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="bg-surface border border-line rounded-[24px] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
@@ -207,11 +119,44 @@ export function PasteResultModal({
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5">
+          {/* Multi-game textarea */}
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <label className="text-[12px] font-bold text-text">Share text</label>
+              <div className="flex items-center gap-2">
+                {rawText && (
+                  <button
+                    type="button"
+                    onClick={() => setRawText("")}
+                    className="text-[12px] font-bold text-muted hover:text-text px-2 py-1"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={pasteFromClipboard}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-lime text-[#121212] px-4 py-2 text-[13px] font-extrabold"
+                >
+                  <ClipboardPaste className="w-4 h-4" />
+                  <span>Paste</span>
+                </button>
+              </div>
+            </div>
+            <textarea
+              rows={7}
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, Wordishingrilliontapdle, Metrodle, Connections, or Strands...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
+              className="w-full bg-bg border border-line rounded-2xl p-4 text-[13px] font-mono text-text placeholder:text-muted/60 focus:outline-none focus:border-lime resize-y"
+            />
+          </div>
+
           {/* Player & Date selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-muted mb-1.5">
-                Submitting for player
+                Player
               </label>
               <select
                 value={selectedPlayerId}
@@ -225,42 +170,18 @@ export function PasteResultModal({
                 ))}
               </select>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-muted mb-1.5">
-                League date (Europe/London)
+                Date (London)
               </label>
               <input
                 type="date"
                 value={leagueDate}
                 max={defaultDate}
                 onChange={(e) => setLeagueDate(e.target.value)}
-                className="w-full bg-surface2 border border-line rounded-xl px-3.5 py-2.5 text-sm font-bold text-text focus:outline-none focus:border-lime"
+                className="block w-full min-w-0 max-w-full bg-surface2 border border-line rounded-xl px-3.5 py-2.5 text-sm font-bold text-text focus:outline-none focus:border-lime"
               />
             </div>
-          </div>
-
-          {/* Multi-game textarea */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[12px] font-bold text-text">
-                Share text (paste one or multiple games together)
-              </label>
-              <button
-                type="button"
-                onClick={() => setRawText(SAMPLE_TEXT)}
-                className="text-[11px] font-bold text-lime hover:underline flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Load sample</span>
-              </button>
-            </div>
-            <textarea
-              rows={7}
-              value={rawText}
-              onChange={(e) => setRawText(e.target.value)}
-              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, Wordishingrilliontapdle, Metrodle, Connections, or Strands...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
-              className="w-full bg-bg border border-line rounded-2xl p-4 text-[13px] font-mono text-text placeholder:text-muted/60 focus:outline-none focus:border-lime resize-y"
-            />
           </div>
 
           {/* Live Detection Preview */}
