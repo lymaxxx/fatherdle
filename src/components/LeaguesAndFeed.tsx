@@ -327,14 +327,14 @@ function Graphic({ item }: { item: FeedResultItem }) {
     const tries = m ? Number(m[1]) : 6;
     const failed = /X/i.test(item.displayResult);
     return (
-      <div className="flex gap-1.5">
+      <div className="flex gap-1 sm:gap-1.5">
         {Array.from({ length: 6 }).map((_, i) => {
           const wrong = failed ? true : i < tries - 1;
           const correct = !failed && i === tries - 1;
           return (
             <span
               key={i}
-              className={`w-[34px] h-[34px] md:w-[44px] md:h-[44px] rounded-[8px] ${
+              className={`w-[24px] h-[24px] sm:w-[34px] sm:h-[34px] md:w-[44px] md:h-[44px] rounded-[6px] sm:rounded-[8px] ${
                 correct ? "bg-[#121212]" : wrong ? "bg-[#121212]/20" : "border-2 border-[#121212]"
               }`}
             />
@@ -372,6 +372,11 @@ function Graphic({ item }: { item: FeedResultItem }) {
     );
   }
   return <span />;
+}
+
+export interface FeedLinks {
+  onOpenPlayer: (playerId: string) => void;
+  onOpenGame: (slug: GameSlug) => void;
 }
 
 export interface FeedActions {
@@ -447,11 +452,13 @@ function ResultCard({
   today,
   now,
   actions,
+  links,
 }: {
   item: FeedResultItem;
   today: string;
   now: number;
   actions: FeedActions;
+  links: FeedLinks;
 }) {
   const game = GAMES[item.gameSlug];
   const place =
@@ -468,11 +475,22 @@ function ResultCard({
           {item.playerName.slice(0, 1).toUpperCase()}
         </span>
         <div className="flex-1 min-w-0 text-[16px] md:text-[18px] truncate">
-          <span className="font-extrabold">{item.playerName}</span>{" "}
+          <button
+            type="button"
+            onClick={() => links.onOpenPlayer(item.playerId)}
+            className="font-extrabold hover:underline"
+          >
+            {item.playerName}
+          </button>{" "}
           <span className="text-muted">played</span>{" "}
-          <span style={{ color: game.color }} className="font-extrabold">
+          <button
+            type="button"
+            onClick={() => links.onOpenGame(item.gameSlug)}
+            style={{ color: game.color }}
+            className="font-extrabold hover:underline"
+          >
             {game.name}
-          </span>
+          </button>
         </div>
         <span className="text-[12px] md:text-[13px] text-muted whitespace-nowrap">
           {item.date === today ? relativeTime(item.at, now) : ""}
@@ -481,11 +499,13 @@ function ResultCard({
       </div>
       <div
         style={{ backgroundColor: game.color, color: INK }}
-        className="rounded-[18px] px-4 py-4 md:px-6 md:py-5 flex items-center justify-between gap-4 min-h-[88px]"
+        className="rounded-[18px] px-4 py-4 md:px-6 md:py-5 flex items-center justify-between gap-3 min-h-[88px] overflow-hidden"
       >
-        <Graphic item={item} />
+        <div className="min-w-0">
+          <Graphic item={item} />
+        </div>
         <div className="text-right shrink-0 ml-auto">
-          <div className="font-serif text-[44px] md:text-[64px] leading-[0.95] tracking-[-1px] whitespace-nowrap">
+          <div className="font-serif text-[40px] md:text-[64px] leading-[0.95] tracking-[-1px] whitespace-nowrap">
             {item.displayResult}
           </div>
           {place && <div className="text-[12px] md:text-[14px] font-extrabold mt-1">{place}</div>}
@@ -495,7 +515,17 @@ function ResultCard({
   );
 }
 
-function LeadCard({ item, now, today }: { item: Extract<FeedItem, { kind: "lead" }>; now: number; today: string }) {
+function LeadCard({
+  item,
+  now,
+  today,
+  links,
+}: {
+  item: Extract<FeedItem, { kind: "lead" }>;
+  now: number;
+  today: string;
+  links: FeedLinks;
+}) {
   const max = Math.max(1, ...item.bars.map((b) => b.points));
   return (
     <div className="bg-surface rounded-[22px] p-4 md:p-5 space-y-3.5">
@@ -507,7 +537,13 @@ function LeadCard({ item, now, today }: { item: Extract<FeedItem, { kind: "lead"
           {item.playerName.slice(0, 1).toUpperCase()}
         </span>
         <div className="flex-1 min-w-0 text-[16px] md:text-[18px] leading-tight">
-          <span className="font-extrabold">{item.playerName}</span>{" "}
+          <button
+            type="button"
+            onClick={() => links.onOpenPlayer(item.playerId)}
+            className="font-extrabold hover:underline"
+          >
+            {item.playerName}
+          </button>{" "}
           <span className="text-muted">took the lead in {item.date === today ? "today's" : "that day's"} league</span>
         </div>
         <span className="text-[12px] md:text-[13px] text-muted whitespace-nowrap">
@@ -543,6 +579,7 @@ export function FeedView({
   todayStandings,
   onPaste,
   actions,
+  links,
 }: {
   items: FeedItem[];
   hasMore: boolean;
@@ -554,6 +591,7 @@ export function FeedView({
   todayStandings: PlayerStandingRow[];
   onPaste: () => void;
   actions: FeedActions;
+  links: FeedLinks;
 }) {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -622,9 +660,9 @@ export function FeedView({
               </div>
               {g.items.map((it) =>
                 it.kind === "result" ? (
-                  <ResultCard key={it.id} item={it} today={todayDate} now={now} actions={actions} />
+                  <ResultCard key={it.id} item={it} today={todayDate} now={now} actions={actions} links={links} />
                 ) : (
-                  <LeadCard key={it.id} item={it} today={todayDate} now={now} />
+                  <LeadCard key={it.id} item={it} today={todayDate} now={now} links={links} />
                 )
               )}
             </div>

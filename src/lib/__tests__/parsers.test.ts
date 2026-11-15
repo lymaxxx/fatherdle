@@ -300,7 +300,7 @@ describe("MapTap rounds", () => {
     const r = parseMapTap(`www.maptap.gg November 14
 98🔥 89🎉 85💫 90👑 75😂
 Final score: 852`);
-    expect(r?.metadata.rounds.map((x: { score: number }) => x.score)).toEqual([98, 89, 85, 90, 75]);
+    expect((r?.metadata.rounds as Array<{ score: number }>).map((x) => x.score)).toEqual([98, 89, 85, 90, 75]);
     expect(r?.primaryValue).toBe(852);
   });
 });

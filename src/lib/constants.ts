@@ -146,8 +146,8 @@ export const GAMES: Record<GameSlug, GameConfig> = {
   },
   flagle: {
     slug: "flagle",
-    name: "Flagdle",
-    shortName: "Flagdle",
+    name: "Flagle",
+    shortName: "Flagle",
     color: TOKENS.pink,
     textColor: "#121212",
     url: "https://www.flagle.io",

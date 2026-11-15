@@ -686,6 +686,16 @@ export function FatherdleApp({
             todayDate={data.todayDate}
             todayStandings={data.today.standings}
             onPaste={() => setIsPasteOpen(true)}
+            links={{
+              onOpenPlayer: (id) => {
+                setViewedPlayerId(id);
+                setActiveTab("players");
+              },
+              onOpenGame: (slug) => {
+                setSelectedGameSlug(slug);
+                setActiveTab("games");
+              },
+            }}
             actions={{
               canManage: (playerId) => isAdmin || (hasJoined && playerId === currentUserId),
               players: data.players,
@@ -702,7 +712,8 @@ export function FatherdleApp({
             g.rankings.some((r) => r.playerId === currentUserId)
           ).length;
           const qualifiedCount = data.today.games.filter((g) => g.status === "Qualified").length;
-          const required = data.today.games[0]?.requiredCount ?? 3;
+          const required = data.today.games[0]?.requiredCount ?? 1;
+          const active = data.today.games[0]?.activePlayers ?? 0;
           const dateLabel = new Date(`${data.todayDate}T12:00:00Z`).toLocaleDateString("en-GB", {
             weekday: "short",
             day: "numeric",
@@ -866,7 +877,9 @@ export function FatherdleApp({
             });
           const pendingNote = (
             <>
-              Counts once {required} of {data.players.length} submit. Until then: Pending.
+              {active === 0
+                ? "Counts once someone plays. Until then: Pending."
+                : `Counts once ${required} of ${active} active players submit. Until then: Pending.`}
             </>
           );
 
@@ -1177,8 +1190,11 @@ export function FatherdleApp({
                       <div>
                         <div className="font-bold text-text">Qualified and Pending</div>
                         <p className="text-muted mt-0.5">
-                          A game counts towards the league once {required} of {data.players.length}{" "}
-                          players have submitted. Until then it is Pending and awards no points.
+                          A game counts towards the league once at least half of the players who
+                          played that day have submitted it
+                          {active > 0 ? ` (${required} of ${active} right now)` : ""}. Until then it is
+                          Pending and awards no points. Players who haven&apos;t played anything that day
+                          don&apos;t count towards the half.
                         </p>
                       </div>
                     </div>
@@ -2204,10 +2220,11 @@ export function FatherdleApp({
                         : "Qualification status"}
                     </strong>
                     {data.gamePage.todayStanding.submissionCount} of{" "}
-                    {data.gamePage.todayStanding.totalPlayers} players have submitted and{" "}
-                    {data.gamePage.todayStanding.requiredCount} are needed, so today&apos;s
-                    results are {data.gamePage.todayStanding.status}. An Excluded game still
-                    shows rankings and results here, but awards no league points.
+                    {data.gamePage.todayStanding.activePlayers} active players have submitted and{" "}
+                    {data.gamePage.todayStanding.requiredCount} are needed (at least half of those
+                    who played anything that day), so the results are{" "}
+                    {data.gamePage.todayStanding.status}. An Excluded game still shows rankings and
+                    results here, but awards no league points.
                   </div>
                 </div>
               </div>

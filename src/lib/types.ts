@@ -70,6 +70,7 @@ export interface DailyGameStanding {
   isFinalised: boolean;
   submissionCount: number;
   requiredCount: number;
+  activePlayers: number; // players with at least one result that day
   totalPlayers: number;
   rankings: RankedSubmission[];
   missingPlayers: Player[];

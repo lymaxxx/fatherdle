@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Could not recognise any supported game results. Paste share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagdle, Catfishing, Poople, or Wordishingrilliontapdle.",
+              "Could not recognise any supported game results. Paste share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, or Wordishingrilliontapdle.",
             unrecognisedBlocks,
           },
           { status: 400 }

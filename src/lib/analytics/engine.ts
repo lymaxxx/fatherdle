@@ -39,7 +39,9 @@ export function compareGameSubmissions(a: Submission, b: Submission): number {
  * Calculates the daily game standing for a single (gameSlug, leagueDate).
  *
  * Rules:
- * - Minimum threshold defaults to 4 players (`game.minSubmissions`).
+ * - A game qualifies once at least half of that day's active players have submitted it.
+ *   Active players are those with at least one result of any game on that date; players who
+ *   played nothing that day don't count towards the half.
  * - If `submissionCount >= requiredCount`: status = "Qualified".
  * - If `submissionCount < requiredCount`:
  *   - If `leagueDate === currentTodayDate`: status = "Pending" (provisional).
@@ -58,11 +60,18 @@ export function calculateDailyGameStanding(
   leagueDate: string,
   submissions: Submission[],
   players: Player[],
-  currentTodayDate: string = "2026-11-14"
+  currentTodayDate: string = "2026-11-14",
+  // Everything submitted that day (any game); defaults to `submissions`, which may be every game's results
+  daySubmissions?: Submission[]
 ): DailyGameStanding {
   const game = GAMES[gameSlug] || GAMES.custom;
-  const requiredCount = game.minSubmissions ?? DEFAULT_MIN_SUBMISSIONS;
   const playerMap = new Map(players.map((p) => [p.id, p]));
+  const activePlayers = new Set(
+    (daySubmissions ?? submissions)
+      .filter((s) => s.leagueDate === leagueDate && playerMap.has(s.playerId))
+      .map((s) => s.playerId)
+  ).size;
+  const requiredCount = Math.max(1, Math.ceil(activePlayers / 2));
 
   // Filter to active players who existed on or before leagueDate
   const eligiblePlayers = players.filter((p) => p.joinedAt <= leagueDate);
@@ -127,6 +136,7 @@ export function calculateDailyGameStanding(
     isFinalised,
     submissionCount,
     requiredCount,
+    activePlayers,
     totalPlayers: eligiblePlayers.length,
     rankings,
     missingPlayers,
@@ -149,8 +159,12 @@ export function calculateAllDailyStandings(
 
   // Index submissions by `${leagueDate}_${gameSlug}` for O(1) lookup
   const byDateGame = new Map<string, Submission[]>();
+  const byDate = new Map<string, Submission[]>();
   for (const s of submissions) {
     if (s.leagueDate < startDate || s.leagueDate > endDate) continue;
+    const dayList = byDate.get(s.leagueDate);
+    if (dayList) dayList.push(s);
+    else byDate.set(s.leagueDate, [s]);
     const key = `${s.leagueDate}_${s.gameSlug}`;
     const list = byDateGame.get(key);
     if (list) list.push(s);
@@ -164,7 +178,7 @@ export function calculateAllDailyStandings(
       // Include if there are submissions OR if it's today's active games
       if (subs.length > 0 || date === currentTodayDate) {
         results.push(
-          calculateDailyGameStanding(slug, date, subs, players, currentTodayDate)
+          calculateDailyGameStanding(slug, date, subs, players, currentTodayDate, byDate.get(date) ?? [])
         );
       }
     }

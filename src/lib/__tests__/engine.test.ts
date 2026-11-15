@@ -70,10 +70,16 @@ describe("League Scoring, Qualification & Metric Calculations (Section 11)", () 
     ]);
   });
 
-  it("distinguishes Pending (today < 4) vs Excluded (past < 4) and awards 0 league points while keeping game leaderboard", () => {
+  it("distinguishes Pending (today, below half of active players) vs Excluded (past) and awards 0 league points while keeping game leaderboard", () => {
+    // Four other players played Wordle both days, so six players are active and three are needed.
+    const activeWordle = (date: string): Submission[] =>
+      ["p3", "p4", "p5", "p6"].map((id, i) =>
+        makeSub({ playerId: id, gameSlug: "wordle", leagueDate: date, primaryValue: 3 + i })
+      );
     const twoSubsPast: Submission[] = [
       makeSub({ playerId: "p1", gameSlug: "maptap", leagueDate: "2026-11-10", primaryValue: 960 }),
       makeSub({ playerId: "p2", gameSlug: "maptap", leagueDate: "2026-11-10", primaryValue: 910 }),
+      ...activeWordle("2026-11-10"),
     ];
 
     const pastStanding = calculateDailyGameStanding(
@@ -91,6 +97,7 @@ describe("League Scoring, Qualification & Metric Calculations (Section 11)", () 
     const twoSubsToday: Submission[] = [
       makeSub({ playerId: "p1", gameSlug: "maptap", leagueDate: "2026-11-14", primaryValue: 960 }),
       makeSub({ playerId: "p2", gameSlug: "maptap", leagueDate: "2026-11-14", primaryValue: 910 }),
+      ...activeWordle("2026-11-14"),
     ];
     const todayStanding = calculateDailyGameStanding(
       "maptap",
@@ -102,6 +109,31 @@ describe("League Scoring, Qualification & Metric Calculations (Section 11)", () 
     expect(todayStanding.status).toBe("Pending");
     expect(todayStanding.isFinalised).toBe(false);
     expect(todayStanding.rankings[0].leaguePoints).toBe(0);
+    expect(todayStanding.activePlayers).toBe(6);
+    expect(todayStanding.requiredCount).toBe(3);
+  });
+
+  it("only counts players who played something that day towards the half", () => {
+    // Two players are active. Both submitted MapTap: 2 of 2 is at least half, so it qualifies.
+    // The other four players played nothing, so they don't raise the bar.
+    const subs: Submission[] = [
+      makeSub({ playerId: "p1", gameSlug: "maptap", leagueDate: "2026-11-10", primaryValue: 960 }),
+      makeSub({ playerId: "p2", gameSlug: "maptap", leagueDate: "2026-11-10", primaryValue: 910 }),
+    ];
+    const standing = calculateDailyGameStanding("maptap", "2026-11-10", subs, TEST_PLAYERS, "2026-11-14");
+    expect(standing.activePlayers).toBe(2);
+    expect(standing.requiredCount).toBe(1);
+    expect(standing.status).toBe("Qualified");
+    expect(standing.rankings[0].leaguePoints).toBe(2);
+
+    // Four active players: exactly half (2) is enough, one is not.
+    const four: Submission[] = [
+      ...subs,
+      makeSub({ playerId: "p3", gameSlug: "wordle", leagueDate: "2026-11-10", primaryValue: 3 }),
+      makeSub({ playerId: "p4", gameSlug: "wordle", leagueDate: "2026-11-10", primaryValue: 4 }),
+    ];
+    expect(calculateDailyGameStanding("maptap", "2026-11-10", four, TEST_PLAYERS, "2026-11-14").status).toBe("Qualified");
+    expect(calculateDailyGameStanding("krillion", "2026-11-10", [...four, makeSub({ playerId: "p1", gameSlug: "krillion", leagueDate: "2026-11-10", primaryValue: 300 })], TEST_PLAYERS, "2026-11-14").status).toBe("Excluded");
   });
 
   it("does not penalise points-per-qualified-game or win rate when a player participates in an Excluded game", () => {
@@ -111,9 +143,8 @@ describe("League Scoring, Qualification & Metric Calculations (Section 11)", () 
       makeSub({ playerId: "p2", gameSlug: "wordle", leagueDate: "2026-11-10", primaryValue: 3 }),
       makeSub({ playerId: "p3", gameSlug: "wordle", leagueDate: "2026-11-10", primaryValue: 4 }),
       makeSub({ playerId: "p4", gameSlug: "wordle", leagueDate: "2026-11-10", primaryValue: 5 }),
-      // Excluded game (2 players): p1 comes 2nd
+      // Excluded game (1 of 4 active players is below half): p1 is alone in it
       makeSub({ playerId: "p1", gameSlug: "krillion", leagueDate: "2026-11-10", primaryValue: 250 }),
-      makeSub({ playerId: "p2", gameSlug: "krillion", leagueDate: "2026-11-10", primaryValue: 340 }),
     ];
 
     const period = resolveDatePeriod("week", "2026-11-14");

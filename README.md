@@ -40,7 +40,7 @@ use Git or the CLI.
 - `src/lib/db` stores one JSON document (players + submissions) in Netlify Blobs, or in
   `data/league.json` locally.
 - `src/lib/analytics` holds the points, standings, insights and per-game modules.
-- A game counts towards the league once 4 players have submitted (Qualified); until then it is
+- A game counts towards the league once at least half of that day's active players (anyone who played something that day) have submitted it (Qualified); until then it is
   Pending. Points are inverse rank, ties share a place.
 - The league resets to nothing if the blob store is cleared; there is no login, so anyone with the
   link can join and submit.

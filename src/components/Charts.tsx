@@ -620,7 +620,7 @@ export function ActivityCalendarHeatmap({
 
 /**
  * 5.4 Individual Game Historical Performance Line Chart
- * Respects `invertYAxis` so lower-is-better games (Wordle, Flagdle, Huedle, Poople)
+ * Respects `invertYAxis` so lower-is-better games (Wordle, Flagle, Huedle, Poople)
  * plot better results higher up on the chart.
  */
 export function GameHistoryChart({

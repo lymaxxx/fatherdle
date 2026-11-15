@@ -320,7 +320,7 @@ export function parseMapTap(block: string): ParsedGameSubmission | null {
 }
 
 /**
- * Parses Flagle / Flagdle share text:
+ * Parses Flagle share text:
  * #Flagle #1727 (14.11.2026) 2/6
  * 🟩🟩🟩
  * 🟥🟩🟩
