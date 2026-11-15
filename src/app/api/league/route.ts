@@ -15,6 +15,7 @@ import { addDays, resolveDatePeriod } from "@/lib/analytics/dates";
 import {
   calculateActivityCalendar,
   calculateAllDailyStandings,
+  calculateDailyGameStanding,
   calculateLeagueStandings,
   calculatePlayerProfileAnalytics,
   calculateTimeSeries,
@@ -145,18 +146,19 @@ export async function GET(req: NextRequest) {
       /^\d{4}-\d{2}-\d{2}$/.test(requestedGameDate) && requestedGameDate <= todayDate
         ? requestedGameDate
         : todayDate;
+    // A day with no results still needs a (empty) standing, otherwise the page has nothing to show
     const selectedGameToday =
       (gameDate === todayDate
         ? todayGames.find((g) => g.gameSlug === validGameSlug)
         : undefined) ||
-      calculateAllDailyStandings(
+      calculateDailyGameStanding(
+        validGameSlug,
         gameDate,
-        gameDate,
-        allSubmissions,
+        allSubmissions.filter((s) => s.gameSlug === validGameSlug && s.leagueDate === gameDate),
         players,
         todayDate,
-        [validGameSlug]
-      )[0];
+        allSubmissions.filter((s) => s.leagueDate === gameDate)
+      );
 
     const feedLimit = Math.min(200, Math.max(10, Number(searchParams.get("feedLimit")) || 20));
     const feed = buildFeed(todayDate, allSubmissions, players, feedLimit);

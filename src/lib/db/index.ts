@@ -7,6 +7,7 @@ import { getLondonDateString } from "../analytics/dates";
 import { GameSlug, Player, Submission } from "../types";
 import { parseMultiGamePaste } from "../parsers";
 import quizboisSeed from "../seed/quizbois-seed.json";
+import newGamesBackfill from "../seed/backfill-newgames.json";
 
 /**
  * Storage layer.
@@ -36,6 +37,8 @@ export function getTodayDate(): string {
 interface LeagueData {
   players: Player[];
   submissions: Submission[];
+  /** One-off data migrations that have already been applied to this league. */
+  appliedBackfills?: string[];
 }
 
 const BLOB_STORE = "fatherdle";
@@ -260,7 +263,9 @@ async function load(forWrite = false): Promise<LeagueData> {
           : { players: [], submissions: [] };
         await writePersisted(data);
       }
-      if (normalizeResults(data)) await writePersisted(data);
+      const normalised = normalizeResults(data);
+      const backfilled = applyBackfills(data);
+      if (normalised || backfilled) await writePersisted(data);
       cache = data;
       cachedAt = Date.now();
       return data;
@@ -290,24 +295,24 @@ function seedEnabled(): boolean {
  * Merges the Quizbois chat history (9-14 Nov 2026) into a league document: adds missing players by
  * first name and upserts every parsed result. Safe to run more than once.
  */
-export function mergeQuizboisSeed(data: LeagueData): LeagueData {
-  const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  for (const sp of quizboisSeed.players) {
-    if (!data.players.some((p) => p.slug === slugOf(sp.name))) {
-      data.players.push({
-        id: `p_${slugOf(sp.name)}`,
-        slug: slugOf(sp.name),
-        name: sp.name,
-        color: SEED_PALETTE[data.players.length % SEED_PALETTE.length],
-        avatarInitials: sp.name.slice(0, 1).toUpperCase(),
-        joinedAt: sp.joinedAt,
-      });
-    }
-  }
-  for (const entry of quizboisSeed.entries) {
-    const player = data.players.find((p) => p.slug === slugOf(entry.player));
+const slugOfName = (name: string) =>
+  name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** Parses each entry's share text and adds the results for the matching player (by first name). */
+function applySeedEntries(
+  data: LeagueData,
+  entries: Array<{ date: string; player: string; text: string }>,
+  overwrite: boolean
+): number {
+  let added = 0;
+  for (const entry of entries) {
+    const player = data.players.find((p) => p.slug === slugOfName(entry.player));
     if (!player) continue;
     for (const item of parseMultiGamePaste(entry.text).parsed) {
+      const exists = data.submissions.some(
+        (x) => x.playerId === player.id && x.gameSlug === item.gameSlug && x.leagueDate === entry.date
+      );
+      if (exists && !overwrite) continue;
       const id = `sub_${entry.date}_${item.gameSlug}_${player.id}`;
       const sub: Submission = {
         id,
@@ -329,8 +334,40 @@ export function mergeQuizboisSeed(data: LeagueData): LeagueData {
       const i = data.submissions.findIndex((x) => x.id === id);
       if (i >= 0) data.submissions[i] = sub;
       else data.submissions.push(sub);
+      added++;
     }
   }
+  return added;
+}
+
+/**
+ * Adds history for games that were supported later (Metrodle, Connections, Strands) to leagues that
+ * already exist. Runs once per league, never overwrites a result, and skips players that were
+ * renamed or removed.
+ */
+function applyBackfills(data: LeagueData): boolean {
+  const done = (data.appliedBackfills ??= []);
+  if (done.includes(newGamesBackfill.id)) return false;
+  if (!isDemoMode() && seedEnabled()) applySeedEntries(data, newGamesBackfill.entries, false);
+  done.push(newGamesBackfill.id);
+  return true;
+}
+
+export function mergeQuizboisSeed(data: LeagueData): LeagueData {
+  const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  for (const sp of quizboisSeed.players) {
+    if (!data.players.some((p) => p.slug === slugOf(sp.name))) {
+      data.players.push({
+        id: `p_${slugOf(sp.name)}`,
+        slug: slugOf(sp.name),
+        name: sp.name,
+        color: SEED_PALETTE[data.players.length % SEED_PALETTE.length],
+        avatarInitials: sp.name.slice(0, 1).toUpperCase(),
+        joinedAt: sp.joinedAt,
+      });
+    }
+  }
+  applySeedEntries(data, quizboisSeed.entries, true);
   return data;
 }
 
