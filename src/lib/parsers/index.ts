@@ -9,7 +9,7 @@ export interface ParsedGameSubmission {
   primaryValue: number; // Used for ranking
   secondaryValue: number | null; // Tie-breaker 1
   tertiaryValue: number | null; // Tie-breaker 2
-  displayResult: string; // Shown in leaderboard, e.g. "6/6", "988", "57 moves", "10,857 pts"
+  displayResult: string; // Shown in leaderboard, e.g. "6/6", "988", "57 moves", "10,857"
   failed: boolean;
   rawText: string;
   metadata: Record<string, unknown>;
@@ -289,17 +289,13 @@ export function parseMapTap(block: string): ParsedGameSubmission | null {
     if (month) extractedDate = `${year}-${month}-${day}`;
   }
 
-  // Extract round scores (e.g. 100🎯 99🔥 99🔥 97🔥 100🎯)
-  const roundMatches = [...block.matchAll(/\b(\d{1,3})(🎯|🔥|📍|✨|👍|🗺️)?/gu)].filter(
-    (m) => {
-      const val = parseInt(m[1], 10);
-      return Boolean(m[2]) && val <= 100;
-    }
-  );
-  const rounds = roundMatches.map((m) => ({
-    score: parseInt(m[1], 10),
-    badge: m[2] || "",
-  }));
+  // Extract round scores (e.g. 100🎯 99🔥 99🔥 97🔥 100🎯). Every round carries a different
+  // emoji badge, so accept any non-digit suffix.
+  const rounds = block
+    .split(/\s+/)
+    .map((token) => token.match(/^(\d{1,3})([^\d\s]+)$/u))
+    .filter((m): m is RegExpMatchArray => m !== null && parseInt(m[1], 10) <= 100)
+    .map((m) => ({ score: parseInt(m[1], 10), badge: m[2] }));
   const bullseyes = rounds.filter((r) => r.score === 100 || r.badge === "🎯").length;
   const roundSum = rounds.reduce((acc, r) => acc + r.score, 0);
 
@@ -404,7 +400,7 @@ export function parseNoillirk(block: string): ParsedGameSubmission | null {
     primaryValue: altitude,
     secondaryValue: blueTiles + greenTiles,
     tertiaryValue: yellowTiles,
-    displayResult: `${altitude.toLocaleString("en-GB")}m`,
+    displayResult: `${altitude.toLocaleString("en-GB")}`,
     failed: false,
     rawText: block.trim(),
     metadata: {
@@ -532,7 +528,7 @@ export function parseWordishingrilliontapdle(block: string): ParsedGameSubmissio
     primaryValue: points,
     secondaryValue: -attempts, // Fewer attempts breaks ties
     tertiaryValue: multiplier,
-    displayResult: `${points.toLocaleString("en-GB")} pts`,
+    displayResult: `${points.toLocaleString("en-GB")}`,
     failed,
     rawText: block.trim(),
     metadata: {

@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE, isValidAdminToken } from "@/lib/admin-auth";
 import {
   createPlayer,
+  deleteSubmission,
+  findSubmission,
   getAllPlayers,
   getSubmissionsInRange,
-  importQuizboisSeed,
   getTodayDate,
+  importQuizboisSeed,
+  reassignSubmission,
   upsertSubmissions,
 } from "@/lib/db";
 import { addDays, resolveDatePeriod } from "@/lib/analytics/dates";
@@ -219,6 +222,24 @@ export async function POST(req: NextRequest) {
       }
       const player = await createPlayer(name, body.color, body.joinedAt || getTodayDate());
       return NextResponse.json({ player });
+    }
+
+    if (body.action === "delete-result" || body.action === "reassign-result") {
+      const sub = await findSubmission(String(body.submissionId || ""));
+      if (!sub) return NextResponse.json({ error: "That result no longer exists." }, { status: 404 });
+      // No logins here: the browser says who it is. Players can manage their own results, the admin anyone's.
+      if (!isAdmin && String(body.actingPlayerId || "") !== sub.playerId) {
+        return NextResponse.json(
+          { error: "You can only change your own results." },
+          { status: 403 }
+        );
+      }
+      if (body.action === "delete-result") {
+        await deleteSubmission(sub.id);
+        return NextResponse.json({ ok: true });
+      }
+      const moved = await reassignSubmission(sub.id, String(body.toPlayerId || ""));
+      return NextResponse.json({ ok: true, submission: moved });
     }
 
     if (body.action === "import-quizbois") {

@@ -131,6 +131,7 @@ export interface FeedResultItem {
   outOf: number;
   dayBest: number | null;
   grid: string[] | null; // Wordle-style tile rows
+  rounds: number[] | null; // MapTap round scores
 }
 
 export interface FeedLeadItem {
@@ -154,6 +155,16 @@ function gridFrom(raw: string): string[] | null {
     .map((l) => l.trim())
     .filter((l) => TILE.test(l));
   return rows.length ? rows : null;
+}
+
+/** Round scores from a MapTap share ("98🔥 89🎉 85💫 90👑 75😂"), whatever badge each round got. */
+function roundsFrom(rawText: string): number[] | null {
+  const scores = rawText
+    .split(/\s+/)
+    .map((t) => t.match(/^(\d{1,3})([^\d\s]+)$/u))
+    .filter((m): m is RegExpMatchArray => m !== null && parseInt(m[1], 10) <= 100)
+    .map((m) => parseInt(m[1], 10));
+  return scores.length ? scores : null;
 }
 
 export function buildFeed(
@@ -208,6 +219,7 @@ export function buildFeed(
       outOf: pl?.outOf ?? 0,
       dayBest: pl?.best ?? null,
       grid: s.gameSlug === "wordle" ? gridFrom(s.rawText) : null,
+      rounds: s.gameSlug === "maptap" ? roundsFrom(s.rawText) : null,
       order: -n * 2,
     });
   });

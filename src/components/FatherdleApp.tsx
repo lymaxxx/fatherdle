@@ -292,6 +292,21 @@ export function FatherdleApp({
     if (window.location.pathname !== path) window.history.replaceState(null, "", path);
   }, [activeTab, selectedGameSlug, identityChecked]);
 
+  const manageResult = async (action: string, extra: Record<string, string>) => {
+    try {
+      const res = await fetch("/api/league", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, actingPlayerId: currentUserId, ...extra }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
+      await fetchLeagueData();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Something went wrong.");
+    }
+  };
+
   const chooseIdentity = (id: string) => {
     window.localStorage.setItem(IDENTITY_KEY, id);
     setCurrentUserId(id);
@@ -671,6 +686,13 @@ export function FatherdleApp({
             todayDate={data.todayDate}
             todayStandings={data.today.standings}
             onPaste={() => setIsPasteOpen(true)}
+            actions={{
+              canManage: (playerId) => isAdmin || (hasJoined && playerId === currentUserId),
+              players: data.players,
+              onDelete: (submissionId) => manageResult("delete-result", { submissionId }),
+              onReassign: (submissionId, toPlayerId) =>
+                manageResult("reassign-result", { submissionId, toPlayerId }),
+            }}
           />
         )}
 

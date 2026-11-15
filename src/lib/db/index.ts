@@ -221,6 +221,24 @@ async function writePersisted(data: LeagueData): Promise<void> {
   fs.writeFileSync(LOCAL_FILE, JSON.stringify(data));
 }
 
+/**
+ * Wordishingrilliontapdle and Noillirk used to store their unit in the result text ("10,857 pts",
+ * "5,863m"). The unit is implied by the game, so keep just the number. Returns true if anything changed.
+ */
+function normalizeResults(data: LeagueData): boolean {
+  let changed = false;
+  for (const s of data.submissions) {
+    let next = s.displayResult;
+    if (s.gameSlug === "wordishingrilliontapdle") next = next.replace(/\s*pts$/i, "");
+    else if (s.gameSlug === "noillirk") next = next.replace(/m$/i, "");
+    if (next !== s.displayResult) {
+      s.displayResult = next;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 const CACHE_TTL_MS = 2000;
 let cachedAt = 0;
 
@@ -242,6 +260,7 @@ async function load(forWrite = false): Promise<LeagueData> {
           : { players: [], submissions: [] };
         await writePersisted(data);
       }
+      if (normalizeResults(data)) await writePersisted(data);
       cache = data;
       cachedAt = Date.now();
       return data;
@@ -557,7 +576,7 @@ function buildDeterministicSubmission(
         primaryValue: altitude,
         secondaryValue: blueTiles,
         tertiaryValue: yellowTiles,
-        displayResult: `${altitude.toLocaleString("en-GB")}m`,
+        displayResult: `${altitude.toLocaleString("en-GB")}`,
         failed: false,
         metadataJson: JSON.stringify({
           altitude,
@@ -724,7 +743,7 @@ function buildDeterministicSubmission(
         primaryValue: points,
         secondaryValue: -attempts,
         tertiaryValue: multiplier,
-        displayResult: `${points.toLocaleString("en-GB")} pts`,
+        displayResult: `${points.toLocaleString("en-GB")}`,
         failed: false,
         metadataJson: JSON.stringify({
           points,
@@ -938,4 +957,41 @@ export async function mergePlayers(
   data.players = data.players.filter((p) => p.id !== sourceId);
   await persist(data);
   return { moved, dropped };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Managing individual results
+// ---------------------------------------------------------------------------------------------
+
+export async function findSubmission(id: string): Promise<Submission | null> {
+  return (await load(true)).submissions.find((s) => s.id === id) ?? null;
+}
+
+export async function deleteSubmission(id: string): Promise<void> {
+  const data = await load(true);
+  const before = data.submissions.length;
+  data.submissions = data.submissions.filter((s) => s.id !== id);
+  if (data.submissions.length === before) throw new Error("That result no longer exists.");
+  await persist(data);
+}
+
+/** Moves a result to another player. Refuses if they already have that game for that day. */
+export async function reassignSubmission(id: string, toPlayerId: string): Promise<Submission> {
+  const data = await load(true);
+  const sub = data.submissions.find((s) => s.id === id);
+  if (!sub) throw new Error("That result no longer exists.");
+  const target = data.players.find((p) => p.id === toPlayerId);
+  if (!target) throw new Error("Player not found.");
+  if (sub.playerId === toPlayerId) throw new Error("That result already belongs to this player.");
+  if (
+    data.submissions.some(
+      (s) => s.playerId === toPlayerId && s.gameSlug === sub.gameSlug && s.leagueDate === sub.leagueDate
+    )
+  ) {
+    throw new Error(`${target.name} already has a result for that game on that day.`);
+  }
+  sub.playerId = toPlayerId;
+  sub.id = `sub_${sub.leagueDate}_${sub.gameSlug}_${toPlayerId}`;
+  await persist(data);
+  return sub;
 }

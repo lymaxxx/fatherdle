@@ -196,7 +196,7 @@ Climb today's prompts: https://playdaily.org/noillirk`);
     expect(res?.gameSlug).toBe("noillirk");
     expect(res?.puzzleId).toBe("#49");
     expect(res?.primaryValue).toBe(5863);
-    expect(res?.displayResult).toBe("5,863m");
+    expect(res?.displayResult).toBe("5,863");
   });
 
   it("parses Poople guesses and par", () => {
@@ -225,7 +225,7 @@ https://poople.io/`);
     expect(res?.gameSlug).toBe("wordishingrilliontapdle");
     expect(res?.puzzleId).toBe("#5");
     expect(res?.primaryValue).toBe(10857);
-    expect(res?.displayResult).toBe("10,857 pts");
+    expect(res?.displayResult).toBe("10,857");
     expect(res?.metadata.attempts).toBe(2);
     expect(res?.metadata.multiplier).toBe(1.0);
     expect(res?.metadata.bullseyes).toBe(1);
@@ -292,5 +292,15 @@ Didn't find it (X/6) · 6,018 points (rarity ×1.30)
     expect(r?.primaryValue).toBe(6018);
     expect(r?.failed).toBe(true);
     expect(r?.tertiaryValue).toBe(1.3);
+  });
+});
+
+describe("MapTap rounds", () => {
+  it("reads all five round scores whatever badge they carry", () => {
+    const r = parseMapTap(`www.maptap.gg November 14
+98🔥 89🎉 85💫 90👑 75😂
+Final score: 852`);
+    expect(r?.metadata.rounds.map((x: { score: number }) => x.score)).toEqual([98, 89, 85, 90, 75]);
+    expect(r?.primaryValue).toBe(852);
   });
 });

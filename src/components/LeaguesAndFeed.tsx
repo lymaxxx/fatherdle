@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { ChevronRight, ClipboardPaste, Share2, X } from "lucide-react";
+import { ChevronRight, ClipboardPaste, MoreHorizontal, Share2, Trash2, X } from "lucide-react";
 import { GAMES } from "@/lib/constants";
 import type { FeedItem, FeedResultItem, LeagueWeek } from "@/lib/analytics/feed";
-import type { GameSlug, PlayerStandingRow } from "@/lib/types";
+import type { GameSlug, Player, PlayerStandingRow } from "@/lib/types";
 
 const ordinal = (n: number) => {
   const s = ["th", "st", "nd", "rd"];
@@ -343,8 +343,22 @@ function Graphic({ item }: { item: FeedResultItem }) {
       </div>
     );
   }
+  if (slug === "maptap" && item.rounds) {
+    return (
+      <div className="flex flex-wrap gap-x-3 gap-y-2 max-w-[250px] md:max-w-[420px]">
+        {item.rounds.map((points, i) => (
+          <span key={i} className="inline-flex items-center gap-1.5">
+            <span className="w-[22px] h-[22px] md:w-[26px] md:h-[26px] rounded-full border-2 border-[#121212] text-[11px] md:text-[12px] font-extrabold flex items-center justify-center">
+              {i + 1}
+            </span>
+            <span className="text-[16px] md:text-[20px] font-extrabold tabular-nums">{points}</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
   const lowerBetter = GAMES[slug]?.rankingDirection === "lower";
-  if (!lowerBetter && item.dayBest && item.dayBest > 0 && ["maptap", "noillirk", "krillion", "wordishingrilliontapdle"].includes(slug)) {
+  if (!lowerBetter && item.dayBest && item.dayBest > 0 && ["noillirk", "krillion", "wordishingrilliontapdle"].includes(slug)) {
     const pct = Math.max(4, Math.min(100, (item.primaryValue / item.dayBest) * 100));
     return (
       <div className="w-[190px] md:w-[300px]">
@@ -353,7 +367,6 @@ function Graphic({ item }: { item: FeedResultItem }) {
         </div>
         <div className="text-[12px] md:text-[13px] font-semibold opacity-70 mt-2">
           Day&apos;s best {item.dayBest.toLocaleString("en-GB")}
-          {GAMES[slug]?.unit === "m" ? "m" : ""}
         </div>
       </div>
     );
@@ -361,7 +374,85 @@ function Graphic({ item }: { item: FeedResultItem }) {
   return <span />;
 }
 
-function ResultCard({ item, today, now }: { item: FeedResultItem; today: string; now: number }) {
+export interface FeedActions {
+  canManage: (playerId: string) => boolean;
+  players: Player[];
+  onDelete: (submissionId: string) => void;
+  onReassign: (submissionId: string, toPlayerId: string) => void;
+}
+
+function ResultMenu({ item, actions }: { item: FeedResultItem; actions: FeedActions }) {
+  const [open, setOpen] = React.useState(false);
+  const others = actions.players.filter((p) => p.id !== item.playerId);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-label="Manage result"
+        onClick={() => setOpen((o) => !o)}
+        className="w-8 h-8 rounded-full hover:bg-surface2 flex items-center justify-center text-muted"
+      >
+        <MoreHorizontal className="w-5 h-5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-9 z-40 w-56 bg-surface2 border border-line rounded-2xl p-2 shadow-2xl">
+            {others.length > 0 && (
+              <>
+                <div className="px-3 pt-1.5 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted">
+                  Reassign to
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {others.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        if (window.confirm(`Move this ${GAMES[item.gameSlug].name} result to ${p.name}?`))
+                          actions.onReassign(item.id, p.id);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-surface text-left text-[14px] font-bold"
+                    >
+                      <span style={{ backgroundColor: p.color }} className="w-2.5 h-2.5 rounded-full" />
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="h-px bg-line my-1.5" />
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                if (window.confirm(`Delete this ${GAMES[item.gameSlug].name} result for ${item.playerName}?`))
+                  actions.onDelete(item.id);
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-surface text-left text-[14px] font-bold text-orange"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete result
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ResultCard({
+  item,
+  today,
+  now,
+  actions,
+}: {
+  item: FeedResultItem;
+  today: string;
+  now: number;
+  actions: FeedActions;
+}) {
   const game = GAMES[item.gameSlug];
   const place =
     item.placement && item.outOf
@@ -386,6 +477,7 @@ function ResultCard({ item, today, now }: { item: FeedResultItem; today: string;
         <span className="text-[12px] md:text-[13px] text-muted whitespace-nowrap">
           {item.date === today ? relativeTime(item.at, now) : ""}
         </span>
+        {actions.canManage(item.playerId) && <ResultMenu item={item} actions={actions} />}
       </div>
       <div
         style={{ backgroundColor: game.color, color: INK }}
@@ -450,6 +542,7 @@ export function FeedView({
   todayDate,
   todayStandings,
   onPaste,
+  actions,
 }: {
   items: FeedItem[];
   hasMore: boolean;
@@ -460,6 +553,7 @@ export function FeedView({
   todayDate: string;
   todayStandings: PlayerStandingRow[];
   onPaste: () => void;
+  actions: FeedActions;
 }) {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -528,7 +622,7 @@ export function FeedView({
               </div>
               {g.items.map((it) =>
                 it.kind === "result" ? (
-                  <ResultCard key={it.id} item={it} today={todayDate} now={now} />
+                  <ResultCard key={it.id} item={it} today={todayDate} now={now} actions={actions} />
                 ) : (
                   <LeadCard key={it.id} item={it} today={todayDate} now={now} />
                 )
