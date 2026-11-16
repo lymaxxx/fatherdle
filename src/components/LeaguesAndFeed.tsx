@@ -309,6 +309,9 @@ function formatDuration(seconds: number | null): string {
 
 const STACKED_GAMES: GameSlug[] = ["geoguessr", "flagcognito"];
 
+/** Flagcognito stacks its total under the list on phones, but sits beside it on desktop. */
+const stackedOnDesktop = (slug: GameSlug) => slug === "geoguessr";
+
 function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
   const slug = item.gameSlug;
   if (slug === "geoguessr" && item.detail) {
@@ -329,11 +332,15 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
                 </span>
               )}
             </div>
-            <div className="pl-[32px] md:pl-0 text-[12px] md:text-[14px] font-bold tabular-nums whitespace-nowrap opacity-80 md:opacity-100">
-              {r.points.toLocaleString("en-GB")}
-              {r.km !== null && ` · ${Math.round(r.km).toLocaleString("en-GB")} km`}
-              {r.seconds !== null && ` · ${formatDuration(r.seconds)}`}
-              {r.steps !== null && ` · ${r.steps} ${r.steps === 1 ? "step" : "steps"}`}
+            <div className="pl-[32px] md:pl-0 flex text-[12px] md:text-[14px] font-bold tabular-nums whitespace-nowrap opacity-80 md:opacity-100">
+              <span className="w-[52px] md:w-[60px] text-right">{r.points.toLocaleString("en-GB")}</span>
+              <span className="w-[68px] md:w-[84px] text-right">
+                {r.km !== null ? `${Math.round(r.km).toLocaleString("en-GB")} km` : ""}
+              </span>
+              <span className="w-[68px] md:w-[84px] text-right">{formatDuration(r.seconds)}</span>
+              <span className="w-[56px] md:w-[72px] text-right">
+                {r.steps !== null ? `${r.steps} ${r.steps === 1 ? "step" : "steps"}` : ""}
+              </span>
             </div>
           </div>
         ))}
@@ -348,15 +355,15 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
   if (slug === "flagcognito" && item.detail) {
     const flags = (item.detail.flags as Array<{ flag: string; country: string; taps: number }>) ?? [];
     return (
-      <div className="w-full space-y-1.5">
+      <div className="grid grid-cols-[auto_auto_auto] justify-start items-center gap-x-3 md:gap-x-5 gap-y-1.5">
         {flags.map((f, i) => (
-          <div key={i} className="flex items-center gap-2.5">
-            <span className="text-[22px] md:text-[26px] leading-none w-8 shrink-0">{f.flag}</span>
-            <span className="text-[14px] md:text-[16px] font-extrabold truncate min-w-0 flex-1">{f.country}</span>
+          <React.Fragment key={i}>
+            <span className="text-[22px] md:text-[26px] leading-none">{f.flag}</span>
+            <span className="text-[14px] md:text-[16px] font-extrabold">{f.country}</span>
             <span className="text-[13px] md:text-[15px] font-bold whitespace-nowrap">
               {f.taps} {f.taps === 1 ? "tap" : "taps"}
             </span>
-          </div>
+          </React.Fragment>
         ))}
       </div>
     );
@@ -627,13 +634,21 @@ function ResultCard({
       <div
         style={{ backgroundColor: game.color, color: INK }}
         className={`rounded-[18px] px-4 py-4 md:px-6 md:py-5 flex gap-3 min-h-[88px] overflow-hidden ${
-          stacked ? "flex-col" : "items-center justify-between"
+          !stacked
+            ? "items-center justify-between"
+            : stackedOnDesktop(item.gameSlug)
+            ? "flex-col"
+            : "flex-col md:flex-row md:items-center md:justify-between"
         }`}
       >
-        <div className="min-w-0 w-full">
+        <div className={`min-w-0 ${stacked && !stackedOnDesktop(item.gameSlug) ? "w-full md:w-auto" : "w-full"}`}>
           <Graphic item={item} reveal={reveal} />
         </div>
-        <div className={`text-right shrink-0 ml-auto ${stacked ? "w-full" : ""}`}>
+        <div
+          className={`text-right shrink-0 ml-auto ${
+            stacked ? (stackedOnDesktop(item.gameSlug) ? "w-full" : "w-full md:w-auto") : ""
+          }`}
+        >
           <div className="font-serif text-[40px] md:text-[64px] leading-[0.95] tracking-[-1px] whitespace-nowrap">
             {item.displayResult}
           </div>
