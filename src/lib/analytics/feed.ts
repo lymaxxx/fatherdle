@@ -132,6 +132,7 @@ export interface FeedResultItem {
   dayBest: number | null;
   grid: string[] | null; // Wordle-style tile rows
   rounds: number[] | null; // MapTap round scores
+  detail: Record<string, unknown> | null; // extra stats for GeoGuessr, Flagcognito and Flagments
 }
 
 export interface FeedLeadItem {
@@ -167,12 +168,23 @@ function roundsFrom(rawText: string): number[] | null {
   return scores.length ? scores : null;
 }
 
+const DETAIL_GAMES: GameSlug[] = ["geoguessr", "flagcognito", "flagments"];
+
+function detailFrom(metadataJson: string): Record<string, unknown> | null {
+  try {
+    const meta = JSON.parse(metadataJson);
+    return meta && typeof meta === "object" ? (meta as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildFeed(
   todayDate: string,
   submissions: Submission[],
   players: Player[],
   limit: number
-): { items: FeedItem[]; hasMore: boolean } {
+): { items: FeedItem[]; hasMore: boolean; geoguessrPlayed: Record<string, string[]> } {
   const byId = new Map(players.map((p) => [p.id, p]));
   const indexed = submissions
     .map((s, i) => ({ s, i }))
@@ -220,6 +232,7 @@ export function buildFeed(
       dayBest: pl?.best ?? null,
       grid: ["wordle", "connections", "strands"].includes(s.gameSlug) ? gridFrom(s.rawText) : null,
       rounds: s.gameSlug === "maptap" ? roundsFrom(s.rawText) : null,
+      detail: DETAIL_GAMES.includes(s.gameSlug) ? detailFrom(s.metadataJson) : null,
       order: -n * 2,
     });
   });
@@ -266,8 +279,15 @@ export function buildFeed(
   }
 
   items.sort((a, b) => b.order - a.order);
+  // GeoGuessr locations are spoilers: the app only shows them to people who have played that day
+  const geoguessrPlayed: Record<string, string[]> = {};
+  for (const s of submissions) {
+    if (s.gameSlug === "geoguessr") (geoguessrPlayed[s.leagueDate] ??= []).push(s.playerId);
+  }
+
   return {
     items: items.map(({ order: _order, ...rest }) => rest as FeedItem),
     hasMore: indexed.length > limit,
+    geoguessrPlayed,
   };
 }

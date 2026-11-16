@@ -26,7 +26,14 @@ function playerNameSize(name: string): number {
 function dayRowLayout(count: number) {
   const pitch = count <= 9 ? 76 : Math.floor(690 / count);
   const h = pitch - 8;
-  return { pitch, h, compact: h < 62 };
+  const compact = h < 62;
+  return {
+    pitch,
+    h,
+    compact,
+    nameFont: compact ? Math.min(24, Math.floor(h * 0.58)) : 26,
+    resultFont: compact ? Math.min(40, Math.floor(h * 0.92)) : 50,
+  };
 }
 
 function formatOrdinal(n: number): string {
@@ -204,7 +211,7 @@ export function ShareCardModal({
         ctx.fill();
 
         ctx.fillStyle = "#121212";
-        ctx.font = `800 ${compact ? 24 : 26}px ${DM}`;
+        ctx.font = `800 ${layout.nameFont}px ${DM}`;
         ctx.fillText(r.game.name, 80, top);
         if (!compact) {
           ctx.font = `500 18px ${DM}`;
@@ -214,9 +221,9 @@ export function ShareCardModal({
 
         ctx.textAlign = "right";
         ctx.fillStyle = "#121212";
-        ctx.font = `${compact ? 40 : 50}px ${SERIF}`;
+        ctx.font = `${layout.resultFont}px ${SERIF}`;
         ctx.fillText(r.result, 813, y + h / 2);
-        ctx.font = `800 ${compact ? 24 : 26}px ${DM}`;
+        ctx.font = `800 ${layout.nameFont}px ${DM}`;
         ctx.fillText(
           compact
             ? `${formatOrdinal(r.placement)} of ${r.outOf} · ${r.counts ? `+${r.points}` : "–"}`
@@ -438,18 +445,18 @@ function DayCard({
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: compact ? 24 : 26, fontWeight: 800, whiteSpace: "nowrap" }}>{r.game.name}</div>
+            <div style={{ fontSize: layout.nameFont, fontWeight: 800, whiteSpace: "nowrap" }}>{r.game.name}</div>
             {!compact && (
               <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2, whiteSpace: "nowrap" }}>
                 {r.vs}
               </div>
             )}
           </div>
-          <div style={{ width: 213, textAlign: "right", fontFamily: SERIF, fontSize: compact ? 40 : 50, lineHeight: compact ? "40px" : "50px", whiteSpace: "nowrap" }}>
+          <div style={{ width: 213, textAlign: "right", fontFamily: SERIF, fontSize: layout.resultFont, lineHeight: `${layout.resultFont}px`, whiteSpace: "nowrap" }}>
             {r.result}
           </div>
           <div style={{ width: 187, textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: compact ? 24 : 26, fontWeight: 800, whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: layout.nameFont, fontWeight: 800, whiteSpace: "nowrap" }}>
               {formatOrdinal(r.placement)} of {r.outOf}
               {compact ? ` · ${r.counts ? `+${r.points}` : "–"}` : ""}
             </div>

@@ -664,6 +664,154 @@ export function parseStrands(block: string): ParsedGameSubmission | null {
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// GeoGuessr daily challenge, Flagcognito, Flagments
+// ---------------------------------------------------------------------------------------------
+
+const toNumber = (raw: string) => parseFloat(raw.replace(/,/g, ""));
+
+/** "Nov 16, 2026" -> "2026-11-16" */
+function dateFromHeader(block: string): string | null {
+  const m = block.match(/·\s*([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if (!m) return null;
+  const month = MONTHS_MAP[m[1].slice(0, 3).toLowerCase()];
+  return month ? `${m[3]}-${month}-${m[2].padStart(2, "0")}` : null;
+}
+
+function distanceKm(text: string): number | null {
+  const m = text.match(/([\d,]*\.?\d+)\s*(km|mi|m)\b/i);
+  if (!m) return null;
+  const value = toNumber(m[1]);
+  const unit = m[2].toLowerCase();
+  return unit === "km" ? value : unit === "mi" ? value * 1.609344 : value / 1000;
+}
+
+function durationSeconds(text: string): number | null {
+  const min = text.match(/(\d+)\s*min/i);
+  const sec = text.match(/(\d+)\s*sec/i);
+  if (!min && !sec) return null;
+  return (min ? parseInt(min[1], 10) * 60 : 0) + (sec ? parseInt(sec[1], 10) : 0);
+}
+
+/**
+ * Parses a GeoGuessr daily challenge result (no header, the total line is the score):
+ * 1. South Korea: 4,957 pts, 13 km, 20 sec, 2 steps
+ * ...
+ * Total: 18,708 pts, 3,682 km, 2 min, 21 sec, 10 steps
+ */
+export function parseGeoguessr(block: string): ParsedGameSubmission | null {
+  const lines = block.split("\n").map((l) => l.trim());
+  const totalLine = lines.find((l) => /^Total:\s*[\d,]+\s*pts?/i.test(l));
+  if (!totalLine) return null;
+
+  const total = {
+    points: toNumber(totalLine.match(/([\d,]+)\s*pts?/i)![1]),
+    km: distanceKm(totalLine),
+    seconds: durationSeconds(totalLine),
+    steps: totalLine.match(/(\d+)\s*steps?/i) ? parseInt(totalLine.match(/(\d+)\s*steps?/i)![1], 10) : null,
+  };
+
+  const rounds = lines
+    .map((l) => l.match(/^(\d)\.\s+(.+?):\s*(.+)$/))
+    .filter((m): m is RegExpMatchArray => m !== null && /pts?/i.test(m[3]))
+    .map((m) => ({
+      n: parseInt(m[1], 10),
+      country: m[2].trim(),
+      points: toNumber(m[3].match(/([\d,]+)\s*pts?/i)![1]),
+      km: distanceKm(m[3]),
+      seconds: durationSeconds(m[3]),
+      steps: m[3].match(/(\d+)\s*steps?/i) ? parseInt(m[3].match(/(\d+)\s*steps?/i)![1], 10) : null,
+    }));
+
+  return {
+    gameSlug: "geoguessr",
+    gameName: GAMES.geoguessr.name,
+    puzzleId: null,
+    extractedDate: null,
+    primaryValue: total.points,
+    secondaryValue: total.km,
+    tertiaryValue: total.seconds,
+    displayResult: total.points.toLocaleString("en-GB"),
+    failed: false,
+    rawText: block.trim(),
+    metadata: { rounds, total },
+  };
+}
+
+/**
+ * Parses Flagcognito share text:
+ * Flagcognito · Nov 16, 2026
+ * 🇩🇿 Algeria: 5 taps
+ * 🇴🇲 Oman: 5 taps
+ * 🇸🇮 Slovenia: 3 taps
+ * 2,000 / 3,000
+ * I beat 87% of players.
+ */
+export function parseFlagcognito(block: string): ParsedGameSubmission | null {
+  if (!/Flagcognito/i.test(block)) return null;
+  const score = block.match(/([\d,]+)\s*\/\s*([\d,]+)/);
+  if (!score) return null;
+  const points = toNumber(score[1]);
+
+  const flags = block
+    .split("\n")
+    .map((l) => l.trim().match(/^(\S+)\s+(.+?):\s*(\d+)\s*taps?/iu))
+    .filter((m): m is RegExpMatchArray => m !== null)
+    .map((m) => ({ flag: m[1], country: m[2].trim(), taps: parseInt(m[3], 10) }));
+  const beat = block.match(/beat\s+(\d+)%/i);
+
+  return {
+    gameSlug: "flagcognito",
+    gameName: GAMES.flagcognito.name,
+    puzzleId: null,
+    extractedDate: dateFromHeader(block),
+    primaryValue: points,
+    secondaryValue: flags.length ? flags.reduce((a, f) => a + f.taps, 0) : null,
+    tertiaryValue: null,
+    displayResult: points.toLocaleString("en-GB"),
+    failed: false,
+    rawText: block.trim(),
+    metadata: { flags, outOf: toNumber(score[2]), beatPercent: beat ? parseInt(beat[1], 10) : null },
+  };
+}
+
+/**
+ * Parses Flagments share text:
+ * Flagments · Nov 16, 2026
+ * Solved 🟣
+ * 900 pts · 2 peeks · 0 misses
+ * I beat 97% of players.
+ */
+export function parseFlagments(block: string): ParsedGameSubmission | null {
+  if (!/Flagments/i.test(block)) return null;
+  const pts = block.match(/([\d,]+)\s*pts?/i);
+  if (!pts) return null;
+  const points = toNumber(pts[1]);
+  const peeks = block.match(/(\d+)\s*peeks?/i);
+  const misses = block.match(/(\d+)\s*miss(?:es)?/i);
+  const beat = block.match(/beat\s+(\d+)%/i);
+  const solved = /(?<!not\s)solved/i.test(block);
+
+  return {
+    gameSlug: "flagments",
+    gameName: GAMES.flagments.name,
+    puzzleId: null,
+    extractedDate: dateFromHeader(block),
+    primaryValue: points,
+    secondaryValue: peeks ? parseInt(peeks[1], 10) : null,
+    tertiaryValue: misses ? parseInt(misses[1], 10) : null,
+    displayResult: points.toLocaleString("en-GB"),
+    failed: !solved,
+    rawText: block.trim(),
+    metadata: {
+      solved,
+      peeks: peeks ? parseInt(peeks[1], 10) : 0,
+      misses: misses ? parseInt(misses[1], 10) : 0,
+      beatPercent: beat ? parseInt(beat[1], 10) : null,
+    },
+  };
+}
+
 const SINGLE_BLOCK_PARSERS: Array<(block: string) => ParsedGameSubmission | null> = [
   parseWordishingrilliontapdle,
   parseHuedle,
@@ -677,6 +825,9 @@ const SINGLE_BLOCK_PARSERS: Array<(block: string) => ParsedGameSubmission | null
   parseMetrodle,
   parseConnections,
   parseStrands,
+  parseGeoguessr,
+  parseFlagcognito,
+  parseFlagments,
 ];
 
 /**
@@ -719,6 +870,9 @@ export function parseMultiGamePaste(rawInput: string): MultiParseResult {
     { slug: "metrodle", regex: /^Metrodle\s*#?\d+/i },
     { slug: "connections", regex: /^Connections[ \t]*$/im },
     { slug: "strands", regex: /^Strands\s*#?\d+/i },
+    { slug: "geoguessr", regex: /^1\.\s+.+?:\s*[\d,]+\s*pts?\b/i },
+    { slug: "flagcognito", regex: /^Flagcognito\b/i },
+    { slug: "flagments", regex: /^Flagments\b/i },
   ];
 
   // Clean out pure divider lines (`_____`, `-------`, `(less moves is better)`, etc.)

@@ -402,3 +402,81 @@ Metrodle #1631
     expect(parsed.map((p) => p.gameSlug).sort()).toEqual(["connections", "metrodle", "strands"]);
   });
 });
+
+describe("GeoGuessr, Flagcognito and Flagments", () => {
+  it("parses a GeoGuessr daily challenge and scores the total", () => {
+    const r = parseSingleGameText(`1. South Korea: 4,957 pts, 13 km, 20 sec, 2 steps
+2. Ireland: 4,710 pts, 89 km, 28 sec, 1 step
+3. Jordan: 646 pts, 3,054 km, 48 sec, 6 steps
+4. Luxembourg: 3,976 pts, 342 km, 24 sec, 1 step
+5. United States: 4,419 pts, 184 km, 21 sec, 0 steps
+Total: 18,708 pts, 3,682 km, 2 min, 21 sec, 10 steps`);
+    expect(r?.gameSlug).toBe("geoguessr");
+    expect(r?.primaryValue).toBe(18708);
+    expect(r?.displayResult).toBe("18,708");
+    expect(r?.secondaryValue).toBe(3682);
+    expect(r?.tertiaryValue).toBe(141);
+    const meta = r?.metadata as { rounds: Array<{ country: string; points: number; km: number; seconds: number; steps: number }> };
+    expect(meta.rounds).toHaveLength(5);
+    expect(meta.rounds[2]).toMatchObject({ country: "Jordan", points: 646, km: 3054, seconds: 48, steps: 6 });
+    expect(meta.rounds[1].steps).toBe(1);
+  });
+
+  it("parses Flagcognito points, taps and date", () => {
+    const r = parseSingleGameText(`Flagcognito · Nov 16, 2026
+🇩🇿 Algeria: 5 taps
+🇴🇲 Oman: 5 taps
+🇸🇮 Slovenia: 3 taps
+2,000 / 3,000
+I beat 87% of players.
+
+Can you beat 2,000?
+https://guessdash.com/flagcognito?c=5wwfja`);
+    expect(r?.gameSlug).toBe("flagcognito");
+    expect(r?.primaryValue).toBe(2000);
+    expect(r?.displayResult).toBe("2,000");
+    expect(r?.extractedDate).toBe("2026-11-16");
+    const meta = r?.metadata as { flags: Array<{ flag: string; country: string; taps: number }>; beatPercent: number };
+    expect(meta.flags.map((f) => `${f.country}:${f.taps}`)).toEqual(["Algeria:5", "Oman:5", "Slovenia:3"]);
+    expect(meta.flags[0].flag).toBe("🇩🇿");
+    expect(meta.beatPercent).toBe(87);
+  });
+
+  it("parses Flagments points, peeks and misses", () => {
+    const r = parseSingleGameText(`Flagments · Nov 16, 2026
+Solved 🟣
+900 pts · 2 peeks · 0 misses
+I beat 97% of players.
+
+Can you beat 900?
+https://guessdash.com/flagments?c=esgx59`);
+    expect(r?.gameSlug).toBe("flagments");
+    expect(r?.primaryValue).toBe(900);
+    expect(r?.displayResult).toBe("900");
+    expect(r?.extractedDate).toBe("2026-11-16");
+    expect(r?.metadata).toMatchObject({ solved: true, peeks: 2, misses: 0, beatPercent: 97 });
+    expect(r?.failed).toBe(false);
+  });
+
+  it("splits the three new games out of one paste", () => {
+    const { parsed } = parseMultiGamePaste(`1. South Korea: 4,957 pts, 13 km, 20 sec, 2 steps
+2. Ireland: 4,710 pts, 89 km, 28 sec, 1 step
+3. Jordan: 646 pts, 3,054 km, 48 sec, 6 steps
+4. Luxembourg: 3,976 pts, 342 km, 24 sec, 1 step
+5. United States: 4,419 pts, 184 km, 21 sec, 0 steps
+Total: 18,708 pts, 3,682 km, 2 min, 21 sec, 10 steps
+
+Flagcognito · Nov 16, 2026
+🇩🇿 Algeria: 5 taps
+🇴🇲 Oman: 5 taps
+🇸🇮 Slovenia: 3 taps
+2,000 / 3,000
+I beat 87% of players.
+
+Flagments · Nov 16, 2026
+Solved 🟣
+900 pts · 2 peeks · 0 misses
+I beat 97% of players.`);
+    expect(parsed.map((p) => p.gameSlug).sort()).toEqual(["flagcognito", "flagments", "geoguessr"]);
+  });
+});

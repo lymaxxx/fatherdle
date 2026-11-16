@@ -147,7 +147,7 @@ export function PasteResultModal({
               rows={7}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, Wordishingrilliontapdle, Metrodle, Connections, or Strands...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
+              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, Wordishingrilliontapdle, Metrodle, Connections, Strands, GeoGuessr, Flagcognito, or Flagments...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
               className="w-full bg-bg border border-line rounded-2xl p-4 text-[13px] font-mono text-text placeholder:text-muted/60 focus:outline-none focus:border-lime resize-y"
             />
           </div>
@@ -209,8 +209,11 @@ export function PasteResultModal({
                 <strong className="text-text">Poople</strong>,{" "}
                 <strong className="text-text">Wordishingrilliontapdle</strong>,{" "}
                 <strong className="text-text">Metrodle</strong>,{" "}
-                <strong className="text-text">Connections</strong>, and{" "}
-                <strong className="text-text">Strands</strong>.
+                <strong className="text-text">Connections</strong>,{" "}
+                <strong className="text-text">Strands</strong>,{" "}
+                <strong className="text-text">GeoGuessr</strong>,{" "}
+                <strong className="text-text">Flagcognito</strong>, and{" "}
+                <strong className="text-text">Flagments</strong>.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

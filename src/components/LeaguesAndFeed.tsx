@@ -292,8 +292,90 @@ function Tile({ kind }: { kind: "correct" | "present" | "absent" }) {
   return <span className={`${base} bg-[#121212]/20`} />;
 }
 
-function Graphic({ item }: { item: FeedResultItem }) {
+interface GeoRound {
+  n: number;
+  country: string;
+  points: number;
+  km: number | null;
+  seconds: number | null;
+  steps: number | null;
+}
+
+function formatDuration(seconds: number | null): string {
+  if (seconds === null) return "";
+  if (seconds < 60) return `${seconds} s`;
+  return `${Math.floor(seconds / 60)} min ${seconds % 60 ? `${seconds % 60} s` : ""}`.trim();
+}
+
+const STACKED_GAMES: GameSlug[] = ["geoguessr", "flagcognito"];
+
+function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
   const slug = item.gameSlug;
+  if (slug === "geoguessr" && item.detail) {
+    const rounds = (item.detail.rounds as GeoRound[]) ?? [];
+    return (
+      <div className="w-full space-y-1.5">
+        {rounds.map((r) => (
+          <div key={r.n} className="md:flex md:items-center md:gap-2.5">
+            <div className="flex items-center gap-2.5 md:flex-1 md:min-w-0">
+              <span className="w-[22px] h-[22px] shrink-0 rounded-full border-2 border-[#121212] text-[11px] font-extrabold flex items-center justify-center">
+                {r.n}
+              </span>
+              {reveal ? (
+                <span className="text-[14px] md:text-[16px] font-extrabold truncate min-w-0 flex-1">{r.country}</span>
+              ) : (
+                <span className="flex-1 min-w-0">
+                  <span className="block h-[14px] w-[88px] md:w-[120px] rounded-full bg-[#121212]/25" />
+                </span>
+              )}
+            </div>
+            <div className="pl-[32px] md:pl-0 text-[12px] md:text-[14px] font-bold tabular-nums whitespace-nowrap opacity-80 md:opacity-100">
+              {r.points.toLocaleString("en-GB")}
+              {r.km !== null && ` · ${Math.round(r.km).toLocaleString("en-GB")} km`}
+              {r.seconds !== null && ` · ${formatDuration(r.seconds)}`}
+              {r.steps !== null && ` · ${r.steps} ${r.steps === 1 ? "step" : "steps"}`}
+            </div>
+          </div>
+        ))}
+        {!reveal && (
+          <div className="text-[11px] md:text-[12px] font-semibold opacity-70 pt-0.5">
+            Locations stay hidden until you submit your own GeoGuessr result for this day.
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (slug === "flagcognito" && item.detail) {
+    const flags = (item.detail.flags as Array<{ flag: string; country: string; taps: number }>) ?? [];
+    return (
+      <div className="w-full space-y-1.5">
+        {flags.map((f, i) => (
+          <div key={i} className="flex items-center gap-2.5">
+            <span className="text-[22px] md:text-[26px] leading-none w-8 shrink-0">{f.flag}</span>
+            <span className="text-[14px] md:text-[16px] font-extrabold truncate min-w-0 flex-1">{f.country}</span>
+            <span className="text-[13px] md:text-[15px] font-bold whitespace-nowrap">
+              {f.taps} {f.taps === 1 ? "tap" : "taps"}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (slug === "flagments" && item.detail) {
+    const d = item.detail as { solved?: boolean; peeks?: number; misses?: number };
+    const chip = "rounded-full border-2 border-[#121212] px-3 py-1 text-[13px] md:text-[15px] font-extrabold";
+    return (
+      <div className="flex flex-wrap gap-2">
+        {d.solved === false && <span className={`${chip} bg-[#121212] text-text`}>Not solved</span>}
+        <span className={chip}>
+          {d.peeks ?? 0} {d.peeks === 1 ? "peek" : "peeks"}
+        </span>
+        <span className={chip}>
+          {d.misses ?? 0} {d.misses === 1 ? "miss" : "misses"}
+        </span>
+      </div>
+    );
+  }
   if (slug === "wordle" && item.grid) {
     return (
       <div className="flex flex-col gap-1">
@@ -495,14 +577,17 @@ function ResultCard({
   now,
   actions,
   links,
+  reveal,
 }: {
   item: FeedResultItem;
   today: string;
   now: number;
   actions: FeedActions;
   links: FeedLinks;
+  reveal: boolean;
 }) {
   const game = GAMES[item.gameSlug];
+  const stacked = STACKED_GAMES.includes(item.gameSlug);
   const place =
     item.placement && item.outOf
       ? `${ordinal(item.placement)} of ${item.outOf}${item.date === today ? " so far" : ""}`
@@ -516,7 +601,7 @@ function ResultCard({
         >
           {item.playerName.slice(0, 1).toUpperCase()}
         </span>
-        <div className="flex-1 min-w-0 text-[16px] md:text-[18px] truncate">
+        <div className="flex-1 min-w-0 text-[16px] md:text-[18px] leading-tight">
           <button
             type="button"
             onClick={() => links.onOpenPlayer(item.playerId)}
@@ -541,12 +626,14 @@ function ResultCard({
       </div>
       <div
         style={{ backgroundColor: game.color, color: INK }}
-        className="rounded-[18px] px-4 py-4 md:px-6 md:py-5 flex items-center justify-between gap-3 min-h-[88px] overflow-hidden"
+        className={`rounded-[18px] px-4 py-4 md:px-6 md:py-5 flex gap-3 min-h-[88px] overflow-hidden ${
+          stacked ? "flex-col" : "items-center justify-between"
+        }`}
       >
-        <div className="min-w-0">
-          <Graphic item={item} />
+        <div className="min-w-0 w-full">
+          <Graphic item={item} reveal={reveal} />
         </div>
-        <div className="text-right shrink-0 ml-auto">
+        <div className={`text-right shrink-0 ml-auto ${stacked ? "w-full" : ""}`}>
           <div className="font-serif text-[40px] md:text-[64px] leading-[0.95] tracking-[-1px] whitespace-nowrap">
             {item.displayResult}
           </div>
@@ -622,6 +709,8 @@ export function FeedView({
   onPaste,
   actions,
   links,
+  viewerId,
+  geoguessrPlayed,
 }: {
   items: FeedItem[];
   hasMore: boolean;
@@ -634,6 +723,8 @@ export function FeedView({
   onPaste: () => void;
   actions: FeedActions;
   links: FeedLinks;
+  viewerId: string;
+  geoguessrPlayed: Record<string, string[]>;
 }) {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -702,7 +793,19 @@ export function FeedView({
               </div>
               {g.items.map((it) =>
                 it.kind === "result" ? (
-                  <ResultCard key={it.id} item={it} today={todayDate} now={now} actions={actions} links={links} />
+                  <ResultCard
+                    key={it.id}
+                    item={it}
+                    today={todayDate}
+                    now={now}
+                    actions={actions}
+                    links={links}
+                    reveal={
+                      it.gameSlug !== "geoguessr" ||
+                      (!!viewerId &&
+                        (it.playerId === viewerId || (geoguessrPlayed[it.date] ?? []).includes(viewerId)))
+                    }
+                  />
                 ) : (
                   <LeadCard key={it.id} item={it} today={todayDate} now={now} links={links} />
                 )

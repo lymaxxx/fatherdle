@@ -54,7 +54,7 @@ export type NavTab = "today" | "statistics" | "games" | "players" | "onboarding"
 interface LeagueApiResponse {
   todayDate: string;
   leagues: LeaguesPayload;
-  feed: { items: FeedItem[]; hasMore: boolean };
+  feed: { items: FeedItem[]; hasMore: boolean; geoguessrPlayed: Record<string, string[]> };
   period: DatePeriod;
   players: Player[];
   games: GameConfig[];
@@ -679,6 +679,8 @@ export function FatherdleApp({
           <FeedView
             items={data.feed.items}
             hasMore={data.feed.hasMore}
+            viewerId={hasJoined ? currentUserId : ""}
+            geoguessrPlayed={data.feed.geoguessrPlayed}
             onMore={() => setFeedLimit((n) => n + 20)}
             filter={feedFilter}
             onFilter={setFeedFilter}

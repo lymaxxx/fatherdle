@@ -157,6 +157,41 @@ export function createGameAnalyticsModule(gameSlug: GameSlug): GameAnalyticsModu
         return { title: "Mistakes distribution", buckets: markPeakBuckets(counts) };
       }
 
+      case "geoguessr":
+      case "flagcognito":
+      case "flagments": {
+        const ranges =
+          gameSlug === "geoguessr"
+            ? [
+                { label: "<10,000", min: 0, max: 9999 },
+                { label: "10,000–14,999", min: 10000, max: 14999 },
+                { label: "15,000–19,999", min: 15000, max: 19999 },
+                { label: "20,000+", min: 20000, max: 99999 },
+              ]
+            : gameSlug === "flagcognito"
+            ? [
+                { label: "<1,000", min: 0, max: 999 },
+                { label: "1,000–1,999", min: 1000, max: 1999 },
+                { label: "2,000–2,499", min: 2000, max: 2499 },
+                { label: "2,500+", min: 2500, max: 99999 },
+              ]
+            : [
+                { label: "<500", min: 0, max: 499 },
+                { label: "500–699", min: 500, max: 699 },
+                { label: "700–899", min: 700, max: 899 },
+                { label: "900+", min: 900, max: 99999 },
+              ];
+        return {
+          title: "Points distribution",
+          buckets: markPeakBuckets(
+            ranges.map((r) => ({
+              label: r.label,
+              count: gameSubs.filter((s) => s.primaryValue >= r.min && s.primaryValue <= r.max).length,
+            }))
+          ),
+        };
+      }
+
       case "strands": {
         const counts = [
           { label: "No hints", count: gameSubs.filter((s) => s.primaryValue === 0).length },

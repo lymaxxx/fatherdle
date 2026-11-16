@@ -13,6 +13,9 @@ export type GameSlug =
   | "metrodle"
   | "connections"
   | "strands"
+  | "geoguessr"
+  | "flagcognito"
+  | "flagments"
   | "custom";
 
 export interface GameConfig {

@@ -292,6 +292,9 @@ function computeRawStandingsForWindow(
         metrodle: 0,
         connections: 0,
         strands: 0,
+        geoguessr: 0,
+        flagcognito: 0,
+        flagments: 0,
         custom: 0,
       },
     });
