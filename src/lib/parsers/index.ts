@@ -678,12 +678,17 @@ function dateFromHeader(block: string): string | null {
   return month ? `${m[3]}-${month}-${m[2].padStart(2, "0")}` : null;
 }
 
+/** Any distance in the text as kilometres (km, miles, yards, feet and metres are understood). */
 function distanceKm(text: string): number | null {
-  const m = text.match(/([\d,]*\.?\d+)\s*(km|mi|m)\b/i);
+  const m = text.match(/([\d,]*\.?\d+)\s*(km|miles?|mi|yds?|yards?|ft|feet|m)\b/i);
   if (!m) return null;
   const value = toNumber(m[1]);
   const unit = m[2].toLowerCase();
-  return unit === "km" ? value : unit === "mi" ? value * 1.609344 : value / 1000;
+  if (unit === "km") return value;
+  if (unit === "m") return value / 1000;
+  if (unit.startsWith("mi")) return value * 1.609344;
+  if (unit.startsWith("y")) return value * 0.0009144;
+  return value * 0.0003048; // feet
 }
 
 function durationSeconds(text: string): number | null {
@@ -701,6 +706,49 @@ function durationSeconds(text: string): number | null {
  */
 export function parseGeoguessr(block: string): ParsedGameSubmission | null {
   const lines = block.split("\n").map((l) => l.trim());
+  const stepsOf = (t: string) => {
+    const m = t.match(/(\d+)\s*steps?/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
+
+  // Layout 2: "GeoGuessr Daily · 16/11/2026 · 19,411 🥈", then a colour bar and a stats line per round
+  const daily = block.match(/GeoGuessr\s+Daily\s*·\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*·\s*([\d,]+)/i);
+  if (daily) {
+    const rounds = lines
+      .filter((l) => /^[\d,]+\s*pts?\s*·/i.test(l))
+      .map((l, i) => ({
+        n: i + 1,
+        country: null as string | null, // this layout doesn't name the locations
+        points: toNumber(l.match(/([\d,]+)\s*pts?/i)![1]),
+        km: distanceKm(l),
+        seconds: null as number | null,
+        steps: stepsOf(l),
+      }));
+    const points = toNumber(daily[4]) || rounds.reduce((a, r) => a + r.points, 0);
+    const kmValues = rounds.map((r) => r.km).filter((k): k is number => k !== null);
+    const stepValues = rounds.map((r) => r.steps).filter((n): n is number => n !== null);
+    const total = {
+      points,
+      km: kmValues.length ? kmValues.reduce((a, k) => a + k, 0) : null,
+      seconds: null as number | null,
+      steps: stepValues.length ? stepValues.reduce((a, n) => a + n, 0) : null,
+    };
+    return {
+      gameSlug: "geoguessr",
+      gameName: GAMES.geoguessr.name,
+      puzzleId: null,
+      extractedDate: `${daily[3]}-${daily[2].padStart(2, "0")}-${daily[1].padStart(2, "0")}`,
+      primaryValue: points,
+      secondaryValue: total.km,
+      tertiaryValue: null,
+      displayResult: points.toLocaleString("en-GB"),
+      failed: false,
+      rawText: block.trim(),
+      metadata: { rounds, total },
+    };
+  }
+
+  // Layout 1: numbered rounds with country names and a Total line
   const totalLine = lines.find((l) => /^Total:\s*[\d,]+\s*pts?/i.test(l));
   if (!totalLine) return null;
 
@@ -708,7 +756,7 @@ export function parseGeoguessr(block: string): ParsedGameSubmission | null {
     points: toNumber(totalLine.match(/([\d,]+)\s*pts?/i)![1]),
     km: distanceKm(totalLine),
     seconds: durationSeconds(totalLine),
-    steps: totalLine.match(/(\d+)\s*steps?/i) ? parseInt(totalLine.match(/(\d+)\s*steps?/i)![1], 10) : null,
+    steps: stepsOf(totalLine),
   };
 
   const rounds = lines
@@ -716,11 +764,11 @@ export function parseGeoguessr(block: string): ParsedGameSubmission | null {
     .filter((m): m is RegExpMatchArray => m !== null && /pts?/i.test(m[3]))
     .map((m) => ({
       n: parseInt(m[1], 10),
-      country: m[2].trim(),
+      country: m[2].trim() as string | null,
       points: toNumber(m[3].match(/([\d,]+)\s*pts?/i)![1]),
       km: distanceKm(m[3]),
       seconds: durationSeconds(m[3]),
-      steps: m[3].match(/(\d+)\s*steps?/i) ? parseInt(m[3].match(/(\d+)\s*steps?/i)![1], 10) : null,
+      steps: stepsOf(m[3]),
     }));
 
   return {
@@ -871,6 +919,7 @@ export function parseMultiGamePaste(rawInput: string): MultiParseResult {
     { slug: "connections", regex: /^Connections[ \t]*$/im },
     { slug: "strands", regex: /^Strands\s*#?\d+/i },
     { slug: "geoguessr", regex: /^1\.\s+.+?:\s*[\d,]+\s*pts?\b/i },
+    { slug: "geoguessr", regex: /^GeoGuessr\s+Daily\b/i },
     { slug: "flagcognito", regex: /^Flagcognito\b/i },
     { slug: "flagments", regex: /^Flagments\b/i },
   ];

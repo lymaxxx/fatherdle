@@ -294,11 +294,18 @@ function Tile({ kind }: { kind: "correct" | "present" | "absent" }) {
 
 interface GeoRound {
   n: number;
-  country: string;
+  country: string | null;
   points: number;
   km: number | null;
   seconds: number | null;
   steps: number | null;
+}
+
+/** Whole kilometres, or metres for anything under a kilometre. */
+function formatDistance(km: number | null): string {
+  if (km === null) return "";
+  if (km >= 1) return `${Math.round(km).toLocaleString("en-GB")} km`;
+  return `${Math.round(km * 1000)} m`;
 }
 
 function formatDuration(seconds: number | null): string {
@@ -316,6 +323,8 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
   const slug = item.gameSlug;
   if (slug === "geoguessr" && item.detail) {
     const rounds = (item.detail.rounds as GeoRound[]) ?? [];
+    const hasTimes = rounds.some((r) => r.seconds !== null);
+    const hasNames = rounds.some((r) => r.country);
     return (
       <div className="w-full space-y-1.5">
         {rounds.map((r) => (
@@ -324,7 +333,9 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
               <span className="w-[22px] h-[22px] shrink-0 rounded-full border-2 border-[#121212] text-[11px] font-extrabold flex items-center justify-center">
                 {r.n}
               </span>
-              {reveal ? (
+              {!r.country ? (
+                <span className="text-[14px] md:text-[16px] font-extrabold truncate min-w-0 flex-1">Round {r.n}</span>
+              ) : reveal ? (
                 <span className="text-[14px] md:text-[16px] font-extrabold truncate min-w-0 flex-1">{r.country}</span>
               ) : (
                 <span className="flex-1 min-w-0">
@@ -334,17 +345,17 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
             </div>
             <div className="pl-[32px] md:pl-0 flex text-[12px] md:text-[14px] font-bold tabular-nums whitespace-nowrap opacity-80 md:opacity-100">
               <span className="w-[52px] md:w-[60px] text-right">{r.points.toLocaleString("en-GB")}</span>
-              <span className="w-[68px] md:w-[84px] text-right">
-                {r.km !== null ? `${Math.round(r.km).toLocaleString("en-GB")} km` : ""}
-              </span>
-              <span className="w-[68px] md:w-[84px] text-right">{formatDuration(r.seconds)}</span>
+              <span className="w-[68px] md:w-[84px] text-right">{formatDistance(r.km)}</span>
+              {hasTimes && (
+                <span className="w-[68px] md:w-[84px] text-right">{formatDuration(r.seconds)}</span>
+              )}
               <span className="w-[56px] md:w-[72px] text-right">
                 {r.steps !== null ? `${r.steps} ${r.steps === 1 ? "step" : "steps"}` : ""}
               </span>
             </div>
           </div>
         ))}
-        {!reveal && (
+        {!reveal && hasNames && (
           <div className="text-[11px] md:text-[12px] font-semibold opacity-70 pt-0.5">
             Locations stay hidden until you submit your own GeoGuessr result for this day.
           </div>

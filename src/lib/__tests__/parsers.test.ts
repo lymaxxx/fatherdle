@@ -480,3 +480,45 @@ I beat 97% of players.`);
     expect(parsed.map((p) => p.gameSlug).sort()).toEqual(["flagcognito", "flagments", "geoguessr"]);
   });
 });
+
+describe("GeoGuessr Daily layout with miles and yards", () => {
+  const SHARE = `GeoGuessr Daily · 16/11/2026 · 19,411 🥈
+🟪🟪🟪🟪🟪⬛⬛⬛⬛⬛
+2,714 pts · 566 miles · 🚶 55 steps
+🟨🟨🟨🟨🟨🟨🟨🟨🟨🟨 🎯
+5,000 pts · 3 yd · 🚶 6 steps
+🟪🟪🟪🟪⬛⬛⬛⬛⬛⬛
+2,226 pts · 750 miles · 🚶 58 steps
+🟨🟨🟨🟨🟨🟨🟨🟨🟨⬛
+4,601 pts · 77 miles · 🚶 48 steps
+🟨🟨🟨🟨🟨🟨🟨🟨🟨⬛
+4,870 pts · 24 miles · 🚶 54 steps
+──────────
+Now it's your turn! 👇
+www.geoguessr.com/dc/nxjqrf66`;
+
+  it("scores the header total and converts miles and yards to kilometres", () => {
+    const r = parseSingleGameText(SHARE);
+    expect(r?.gameSlug).toBe("geoguessr");
+    expect(r?.primaryValue).toBe(19411);
+    expect(r?.displayResult).toBe("19,411");
+    expect(r?.extractedDate).toBe("2026-11-16");
+    const meta = r?.metadata as { rounds: Array<{ points: number; km: number; steps: number; country: string | null }>; total: { km: number; steps: number } };
+    expect(meta.rounds).toHaveLength(5);
+    expect(meta.rounds.map((x) => x.points)).toEqual([2714, 5000, 2226, 4601, 4870]);
+    expect(meta.rounds[0].km).toBeCloseTo(910.9, 1); // 566 miles
+    expect(meta.rounds[1].km).toBeCloseTo(0.00274, 4); // 3 yards, about 2.7 metres
+    expect(meta.rounds[3].km).toBeCloseTo(123.9, 1); // 77 miles
+    expect(meta.rounds[0].country).toBeNull();
+    expect(meta.total.steps).toBe(55 + 6 + 58 + 48 + 54);
+  });
+
+  it("is split from other games in one paste", () => {
+    const { parsed } = parseMultiGamePaste(`${SHARE}
+
+Flagments · Nov 16, 2026
+Solved 🟣
+900 pts · 2 peeks · 0 misses`);
+    expect(parsed.map((p) => p.gameSlug).sort()).toEqual(["flagments", "geoguessr"]);
+  });
+});
