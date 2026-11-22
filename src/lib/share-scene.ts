@@ -79,7 +79,10 @@ function bars(
   const h = Math.min(barH, pitch - 8);
   rows.forEach((r, i) => {
     const y = top + i * pitch;
-    const w = Math.max(150, Math.round((r.points / Math.max(1, max)) * 968));
+    // A bar must be wide enough for the name and the number side by side (about 17px per letter
+    // at 28px bold, 21px per digit at 52px serif), whatever its share of the leader's points.
+    const minW = 20 + Math.ceil(r.name.length * 17.5) + 28 + String(r.points).length * 21 + 22;
+    const w = Math.min(968, Math.max(minW, Math.round((r.points / Math.max(1, max)) * 968)));
     ops.push({ t: "rect", x: 56, y, w, h, fill: r.color, r: 10 });
     ops.push({
       t: "text",
