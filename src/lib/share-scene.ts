@@ -77,12 +77,21 @@ function bars(
   const ops: Op[] = [];
   const pitch = Math.min(maxPitch, Math.floor(maxHeight / Math.max(1, rows.length)));
   const h = Math.min(barH, pitch - 8);
+  // Width follows points, but never less than what the name and number need. That minimum must not
+  // let a lower score end up with a longer bar, so widths are levelled up from the bottom and tied
+  // scores share the same width.
+  const widths = rows.map((r) => {
+    const minW = 20 + Math.ceil(r.name.length * 17.5) + 28 + String(r.points).length * 21 + 22;
+    return Math.min(968, Math.max(minW, Math.round((r.points / Math.max(1, max)) * 968)));
+  });
+  for (let i = widths.length - 2; i >= 0; i--) widths[i] = Math.max(widths[i], widths[i + 1]);
+  for (let i = 1; i < widths.length; i++) {
+    if (rows[i].points === rows[i - 1].points) widths[i] = widths[i - 1];
+  }
+
   rows.forEach((r, i) => {
     const y = top + i * pitch;
-    // A bar must be wide enough for the name and the number side by side (about 17px per letter
-    // at 28px bold, 21px per digit at 52px serif), whatever its share of the leader's points.
-    const minW = 20 + Math.ceil(r.name.length * 17.5) + 28 + String(r.points).length * 21 + 22;
-    const w = Math.min(968, Math.max(minW, Math.round((r.points / Math.max(1, max)) * 968)));
+    const w = widths[i];
     ops.push({ t: "rect", x: 56, y, w, h, fill: r.color, r: 10 });
     ops.push({
       t: "text",
