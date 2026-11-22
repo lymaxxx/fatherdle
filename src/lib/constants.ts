@@ -111,7 +111,7 @@ export const GAMES: Record<GameSlug, GameConfig> = {
     shortName: "Krillion",
     color: TOKENS.sand,
     textColor: "#121212",
-    url: "https://playdaily.org",
+    url: "https://krillion.io",
     description: "Daily marine counting challenge. Higher score is better.",
     rankingDirection: "higher",
     unit: "pts",
