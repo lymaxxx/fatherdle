@@ -8,6 +8,7 @@ import { GameSlug, Player, Submission } from "../types";
 import { parseMultiGamePaste } from "../parsers";
 import quizboisSeed from "../seed/quizbois-seed.json";
 import newGamesBackfill from "../seed/backfill-newgames.json";
+import nov16to22Backfill from "../seed/backfill-nov16-22.json";
 
 /**
  * Storage layer.
@@ -347,10 +348,14 @@ function applySeedEntries(
  */
 function applyBackfills(data: LeagueData): boolean {
   const done = (data.appliedBackfills ??= []);
-  if (done.includes(newGamesBackfill.id)) return false;
-  if (!isDemoMode() && seedEnabled()) applySeedEntries(data, newGamesBackfill.entries, false);
-  done.push(newGamesBackfill.id);
-  return true;
+  let changed = false;
+  for (const backfill of [newGamesBackfill, nov16to22Backfill]) {
+    if (done.includes(backfill.id)) continue;
+    if (!isDemoMode() && seedEnabled()) applySeedEntries(data, backfill.entries, false);
+    done.push(backfill.id);
+    changed = true;
+  }
+  return changed;
 }
 
 export function mergeQuizboisSeed(data: LeagueData): LeagueData {

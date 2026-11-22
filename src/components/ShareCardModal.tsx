@@ -272,7 +272,7 @@ export function ShareCardModal({
 
   // Visual preview matching 9-share-card-league-1080x1350.png and 10-share-card-game-1080x1350.png
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
       <div className="w-full max-w-md flex flex-col gap-3">
         <div className="flex items-center justify-between text-text px-1">
           <span className="text-sm font-bold whitespace-nowrap">Share card · 4:5</span>

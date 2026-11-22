@@ -153,8 +153,9 @@ export function FatherdleApp({
   const [feedLimit, setFeedLimit] = useState(20);
   const [dismissedBanner, setDismissedBanner] = useState("");
 
+  const customKey = preset === "custom" ? `${customStart}|${customEnd}` : "";
+
   const fetchLeagueData = useCallback(async () => {
-    setLoading(true);
     try {
       const params = new URLSearchParams({
         preset,
@@ -184,8 +185,8 @@ export function FatherdleApp({
       }
       setLoadError(null);
       setData(json);
-      if (visiblePlayerIds.length === 0 && json.players) {
-        setVisiblePlayerIds(json.players.map((p) => p.id));
+      if (json.players) {
+        setVisiblePlayerIds((prev) => (prev.length ? prev : json.players.map((p) => p.id)));
       }
     } catch (e) {
       console.error("Failed to fetch league data:", e);
@@ -199,7 +200,9 @@ export function FatherdleApp({
     } finally {
       setLoading(false);
     }
-  }, [preset, customStart, customEnd, viewedPlayerId, selectedGameSlug, gameDate, feedLimit, visiblePlayerIds.length]);
+    // customKey keeps custom dates out of the dependencies unless that range is actually selected
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset, customKey, viewedPlayerId, selectedGameSlug, gameDate, feedLimit]);
 
   useEffect(() => {
     fetchLeagueData();
@@ -213,31 +216,16 @@ export function FatherdleApp({
       .catch(() => setIsAdmin(false));
   }, []);
 
-  // iOS Safari ignores user-scalable=no, so also swallow pinch gestures ourselves.
+  // iOS Safari ignores user-scalable=no, so also swallow its pinch gestures. (CSS touch-action covers the
+  // rest; a touchmove listener that can cancel would make every scroll wait on JavaScript.)
   useEffect(() => {
     const stop = (e: Event) => e.preventDefault();
-    const stopMulti = (e: TouchEvent) => {
-      if (e.touches.length > 1) e.preventDefault();
-    };
     document.addEventListener("gesturestart", stop);
     document.addEventListener("gesturechange", stop);
-    document.addEventListener("touchmove", stopMulti, { passive: false });
     return () => {
       document.removeEventListener("gesturestart", stop);
       document.removeEventListener("gesturechange", stop);
-      document.removeEventListener("touchmove", stopMulti);
     };
-  }, []);
-
-  // The feed updates in place while it is open.
-  useEffect(() => {
-    if (activeTab !== "feed") return;
-    const t = setInterval(() => fetchLeagueData(), 20000);
-    return () => clearInterval(t);
-  }, [activeTab, fetchLeagueData]);
-
-  useEffect(() => {
-    setDismissedBanner(window.localStorage.getItem("fatherdle.bannerDismissed") || "");
   }, []);
 
   // Every page starts at the top.
@@ -473,7 +461,7 @@ export function FatherdleApp({
   return (
     <div className="min-h-screen bg-bg text-text pb-36 md:pb-16">
       {/* DESKTOP & MOBILE TOP NAV */}
-      <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-line/50">
+      <header className="sticky top-0 z-30 bg-bg border-b border-line/50">
         <div className="max-w-[1360px] mx-auto px-5 h-[68px] flex items-center justify-between gap-4">
           {/* Wordmark */}
           <div className="flex items-center gap-3">
@@ -2433,7 +2421,7 @@ export function FatherdleApp({
 
       {/* JOIN / ADD PLAYER MODAL */}
       {isJoinModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
           <div className="bg-surface border border-line rounded-[24px] w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-extrabold text-text">
