@@ -522,3 +522,35 @@ Solved 🟣
     expect(parsed.map((p) => p.gameSlug).sort()).toEqual(["flagments", "geoguessr"]);
   });
 });
+
+describe("Flagments that was not solved", () => {
+  const FAILED = `Flagments · Nov 23, 2026
+Didn't get it after 15 peeks
+⬛⬛⬛🟣⬛⬛
+⬛🟣⬛🟣🟣⬛
+⬛🟣🟣⬛🟣⬛
+⬛⬛🟣⬛⬛⬛
+
+Can you beat 0?
+https://guessdash.com/flagments?c=q5c2qd`;
+
+  it("records an unsolved game as a failed 0 with its peeks", () => {
+    const r = parseSingleGameText(FAILED);
+    expect(r?.gameSlug).toBe("flagments");
+    expect(r?.failed).toBe(true);
+    expect(r?.primaryValue).toBe(0);
+    expect(r?.displayResult).toBe("0");
+    expect(r?.extractedDate).toBe("2026-11-23");
+    expect(r?.metadata).toMatchObject({ solved: false, peeks: 15, misses: null });
+  });
+
+  it("still reads solved games and splits both out of one paste", () => {
+    const { parsed } = parseMultiGamePaste(`${FAILED}
+
+Flagments · Nov 22, 2026
+Solved 🟣
+900 pts · 2 peeks · 0 misses`);
+    expect(parsed).toHaveLength(2);
+    expect(parsed.map((p) => p.primaryValue).sort((a, b) => a - b)).toEqual([0, 900]);
+  });
+});

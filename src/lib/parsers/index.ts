@@ -832,13 +832,20 @@ export function parseFlagcognito(block: string): ParsedGameSubmission | null {
  */
 export function parseFlagments(block: string): ParsedGameSubmission | null {
   if (!/Flagments/i.test(block)) return null;
+  const solved = /(?<!not\s)solved/i.test(block);
   const pts = block.match(/([\d,]+)\s*pts?/i);
-  if (!pts) return null;
-  const points = toNumber(pts[1]);
+  // An unsolved game has no points line ("Didn't get it after 15 peeks"); it scores the number in
+  // "Can you beat 0?", which is 0.
+  const beatTarget = block.match(/Can you beat\s+([\d,]+)\s*\?/i);
+  const gaveUp = /didn'?t get it|did not get it|not solved|gave up|failed/i.test(block);
+  if (!pts && !solved && !beatTarget && !gaveUp) return null;
+  const points = pts ? toNumber(pts[1]) : beatTarget ? toNumber(beatTarget[1]) : 0;
+  if (!pts && solved) return null; // solved results always show their points
+
   const peeks = block.match(/(\d+)\s*peeks?/i);
   const misses = block.match(/(\d+)\s*miss(?:es)?/i);
   const beat = block.match(/beat\s+(\d+)%/i);
-  const solved = /(?<!not\s)solved/i.test(block);
+  const failed = !solved;
 
   return {
     gameSlug: "flagments",
@@ -849,12 +856,12 @@ export function parseFlagments(block: string): ParsedGameSubmission | null {
     secondaryValue: peeks ? parseInt(peeks[1], 10) : null,
     tertiaryValue: misses ? parseInt(misses[1], 10) : null,
     displayResult: points.toLocaleString("en-GB"),
-    failed: !solved,
+    failed,
     rawText: block.trim(),
     metadata: {
       solved,
       peeks: peeks ? parseInt(peeks[1], 10) : 0,
-      misses: misses ? parseInt(misses[1], 10) : 0,
+      misses: misses ? parseInt(misses[1], 10) : null,
       beatPercent: beat ? parseInt(beat[1], 10) : null,
     },
   };

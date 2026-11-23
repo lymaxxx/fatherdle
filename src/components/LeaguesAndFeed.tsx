@@ -380,7 +380,7 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
     );
   }
   if (slug === "flagments" && item.detail) {
-    const d = item.detail as { solved?: boolean; peeks?: number; misses?: number };
+    const d = item.detail as { solved?: boolean; peeks?: number; misses?: number | null };
     const chip = "rounded-full border-2 border-[#121212] px-3 py-1 text-[13px] md:text-[15px] font-extrabold";
     return (
       <div className="flex flex-wrap gap-2">
@@ -388,9 +388,11 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
         <span className={chip}>
           {d.peeks ?? 0} {d.peeks === 1 ? "peek" : "peeks"}
         </span>
-        <span className={chip}>
-          {d.misses ?? 0} {d.misses === 1 ? "miss" : "misses"}
-        </span>
+        {d.misses !== null && d.misses !== undefined && (
+          <span className={chip}>
+            {d.misses} {d.misses === 1 ? "miss" : "misses"}
+          </span>
+        )}
       </div>
     );
   }
