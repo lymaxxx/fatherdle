@@ -8,6 +8,8 @@ import {
 import {
   createPlayer,
   getAllPlayers,
+  importChatResults,
+  resultKeys,
   mergePlayers,
   playerSubmissionCounts,
   removePlayer,
@@ -26,7 +28,12 @@ async function playersWithCounts() {
 export async function GET(req: NextRequest) {
   try {
     if (!isAdmin(req)) return NextResponse.json({ authed: false });
-    return NextResponse.json({ authed: true, players: await playersWithCounts() });
+    const withKeys = new URL(req.url).searchParams.get("keys") === "1";
+    return NextResponse.json({
+      authed: true,
+      players: await playersWithCounts(),
+      ...(withKeys ? { resultKeys: await resultKeys() } : {}),
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Server error" },
@@ -77,6 +84,20 @@ export async function POST(req: NextRequest) {
       case "remove":
         result = await removePlayer(String(body.playerId));
         break;
+      case "import-results": {
+        const entries = Array.isArray(body.entries) ? body.entries : [];
+        result = {
+          ...(await importChatResults(
+            entries.map((e: { player?: unknown; date?: unknown; text?: unknown }) => ({
+              player: String(e.player ?? ""),
+              date: String(e.date ?? ""),
+              text: String(e.text ?? ""),
+            })),
+            Boolean(body.overwrite)
+          )),
+        };
+        break;
+      }
       case "merge":
         result = await mergePlayers(String(body.sourceId), String(body.targetId));
         break;

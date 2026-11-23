@@ -296,6 +296,30 @@ function seedEnabled(): boolean {
  * Merges the Quizbois chat history (9-14 Nov 2026) into a league document: adds missing players by
  * first name and upserts every parsed result. Safe to run more than once.
  */
+function makeSubmission(
+  playerId: string,
+  date: string,
+  item: ReturnType<typeof parseMultiGamePaste>["parsed"][number]
+): Submission {
+  return {
+    id: `sub_${date}_${item.gameSlug}_${playerId}`,
+    playerId,
+    gameSlug: item.gameSlug,
+    leagueDate: date,
+    puzzleId: item.puzzleId,
+    rawText: item.rawText,
+    primaryValue: item.primaryValue,
+    secondaryValue: item.secondaryValue,
+    tertiaryValue: item.tertiaryValue,
+    displayResult: item.displayResult,
+    failed: item.failed,
+    metadataJson: JSON.stringify(item.metadata),
+    submittedAt: `${date}T12:00:00.000Z`,
+    isLate: false,
+    isCorrected: false,
+  };
+}
+
 const slugOfName = (name: string) =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -314,24 +338,8 @@ function applySeedEntries(
         (x) => x.playerId === player.id && x.gameSlug === item.gameSlug && x.leagueDate === entry.date
       );
       if (exists && !overwrite) continue;
-      const id = `sub_${entry.date}_${item.gameSlug}_${player.id}`;
-      const sub: Submission = {
-        id,
-        playerId: player.id,
-        gameSlug: item.gameSlug,
-        leagueDate: entry.date,
-        puzzleId: item.puzzleId,
-        rawText: item.rawText,
-        primaryValue: item.primaryValue,
-        secondaryValue: item.secondaryValue,
-        tertiaryValue: item.tertiaryValue,
-        displayResult: item.displayResult,
-        failed: item.failed,
-        metadataJson: JSON.stringify(item.metadata),
-        submittedAt: `${entry.date}T12:00:00.000Z`,
-        isLate: false,
-        isCorrected: false,
-      };
+      const sub = makeSubmission(player.id, entry.date, item);
+      const id = sub.id;
       const i = data.submissions.findIndex((x) => x.id === id);
       if (i >= 0) data.submissions[i] = sub;
       else data.submissions.push(sub);
@@ -1036,4 +1044,111 @@ export async function reassignSubmission(id: string, toPlayerId: string): Promis
   sub.id = `sub_${sub.leagueDate}_${sub.gameSlug}_${toPlayerId}`;
   await persist(data);
   return sub;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bulk import (admin: pasted WhatsApp chat)
+// ---------------------------------------------------------------------------------------------
+
+export interface ChatImportEntry {
+  /** An existing player id, or "new:Name" to create one. */
+  player: string;
+  date: string;
+  /** The share text of one result; it is parsed again here, nothing from the browser is trusted. */
+  text: string;
+}
+
+export interface ChatImportSummary {
+  added: number;
+  replaced: number;
+  skippedExisting: number;
+  unreadable: number;
+  createdPlayers: string[];
+  joinDatesMoved: number;
+}
+
+export async function importChatResults(
+  entries: ChatImportEntry[],
+  overwrite: boolean
+): Promise<ChatImportSummary> {
+  if (entries.length > 5000) throw new Error("That is too many results at once (limit 5,000). Narrow the dates.");
+  const data = await load(true);
+  const summary: ChatImportSummary = {
+    added: 0,
+    replaced: 0,
+    skippedExisting: 0,
+    unreadable: 0,
+    createdPlayers: [],
+    joinDatesMoved: 0,
+  };
+
+  const earliest = new Map<string, string>();
+  for (const e of entries) {
+    if (!earliest.has(e.player) || e.date < earliest.get(e.player)!) earliest.set(e.player, e.date);
+  }
+
+  const idFor = new Map<string, string>();
+  for (const ref of earliest.keys()) {
+    if (ref.startsWith("new:")) {
+      const name = ref.slice(4).trim().slice(0, 24);
+      const slug = slugOfName(name);
+      if (!slug) continue;
+      let player = data.players.find((p) => p.slug === slug);
+      if (!player) {
+        player = {
+          id: `p_${slug}_${Date.now().toString(36)}`,
+          slug,
+          name,
+          color: SEED_PALETTE[data.players.length % SEED_PALETTE.length],
+          avatarInitials: name.slice(0, 1).toUpperCase(),
+          joinedAt: earliest.get(ref)!,
+        };
+        data.players.push(player);
+        summary.createdPlayers.push(name);
+      }
+      idFor.set(ref, player.id);
+    } else if (data.players.some((p) => p.id === ref)) {
+      idFor.set(ref, ref);
+    }
+  }
+
+  for (const e of entries) {
+    const playerId = idFor.get(e.player);
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(e.date) && e.text.length < 6000 ? parseMultiGamePaste(e.text).parsed : [];
+    if (!playerId || parsed.length === 0) {
+      summary.unreadable++;
+      continue;
+    }
+    const player = data.players.find((p) => p.id === playerId)!;
+    if (e.date < player.joinedAt) {
+      player.joinedAt = e.date;
+      summary.joinDatesMoved++;
+    }
+    const sub = makeSubmission(playerId, e.date, parsed[0]);
+    const i = data.submissions.findIndex(
+      (x) => x.playerId === playerId && x.gameSlug === sub.gameSlug && x.leagueDate === e.date
+    );
+    if (i >= 0) {
+      if (!overwrite) {
+        summary.skippedExisting++;
+        continue;
+      }
+      sub.id = data.submissions[i].id;
+      sub.isCorrected = true;
+      data.submissions[i] = sub;
+      summary.replaced++;
+    } else {
+      data.submissions.push(sub);
+      summary.added++;
+    }
+  }
+
+  await persist(data);
+  return summary;
+}
+
+/** "player|game|date" for every stored result, so the import preview can tell new from existing. */
+export async function resultKeys(): Promise<string[]> {
+  const { submissions } = await load(true);
+  return submissions.map((s) => `${s.playerId}|${s.gameSlug}|${s.leagueDate}`);
 }

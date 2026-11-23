@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { ChatImport } from "@/components/ChatImport";
 
 interface AdminPlayer {
   id: string;
@@ -193,6 +194,17 @@ export function AdminPanel({
           Add
         </button>
       </form>
+
+      <ChatImport
+        players={players}
+        onImported={() => {
+          fetch("/api/admin")
+            .then((r) => r.json())
+            .then(apply)
+            .catch(() => undefined);
+          onChanged();
+        }}
+      />
 
       <div className="bg-surface border border-line/50 rounded-[22px] divide-y divide-line/50">
         {players.map((p) => {
