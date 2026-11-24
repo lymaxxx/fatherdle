@@ -646,7 +646,7 @@ export function FeedPage({
       </div>
 
       {/* Phone: day strip, every day with results */}
-      <div className="lg:hidden flex gap-2 overflow-x-auto no-scrollbar -mx-5 md:mx-0 px-5 md:px-0 pb-1">
+      <div className="min-[1100px]:hidden flex gap-2 overflow-x-auto no-scrollbar -mx-5 md:mx-0 px-5 md:px-0 pb-1">
         {days.map((d) => {
           const { num, wd } = parts(d.date);
           const sel = selectedDay ? selectedDay === d.date : d.date === todayDate;
@@ -706,9 +706,9 @@ export function FeedPage({
         )}
       </div>
 
-      <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(260px,340px)] lg:grid-cols-[minmax(190px,260px)_minmax(0,1fr)_minmax(260px,360px)] xl:grid-cols-[288px_minmax(0,1fr)_400px] md:gap-4 lg:gap-6 space-y-5 md:space-y-0">
+      <div className="md:grid md:grid-cols-[minmax(0,1fr)_clamp(260px,32vw,400px)] min-[1100px]:grid-cols-[clamp(170px,20vw,288px)_minmax(0,1fr)_clamp(250px,27.8vw,400px)] md:gap-4 min-[1100px]:gap-6 space-y-5 md:space-y-0">
         {/* Desktop: date rail with every day */}
-        <aside className="hidden lg:block self-start sticky top-[100px] max-h-[calc(100vh-120px)] overflow-y-auto no-scrollbar pr-1">
+        <aside className="hidden min-[1100px]:block self-start sticky top-[100px] max-h-[calc(100vh-120px)] overflow-y-auto no-scrollbar pr-1">
           <button
             type="button"
             onClick={() => onSelectDay("")}
