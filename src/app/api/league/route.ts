@@ -22,6 +22,7 @@ import {
 } from "@/lib/analytics/engine";
 import { generateAutomaticInsights } from "@/lib/analytics/insights";
 import { buildFeed, buildLeagues } from "@/lib/analytics/feed";
+import { buildGameStats } from "@/lib/analytics/game-stats";
 import { buildGroupStats } from "@/lib/analytics/group-stats";
 import { createGameAnalyticsModule } from "@/lib/analytics/game-modules";
 import { parseMultiGamePaste } from "@/lib/parsers";
@@ -187,6 +188,21 @@ export async function GET(req: NextRequest) {
         player: targetPlayer,
         standingRow: standings.find((r) => r.player.id === targetPlayer.id) || null,
         strengths: playerProfile.strengths,
+        gameStats: Object.fromEntries(
+          ACTIVE_GAME_SLUGS.map((slug) => [
+            slug,
+            buildGameStats(
+              slug,
+              allSubmissions.filter(
+                (s) =>
+                  s.playerId === targetPlayer.id &&
+                  s.gameSlug === slug &&
+                  s.leagueDate >= period.startDate &&
+                  s.leagueDate <= period.endDate
+              )
+            ),
+          ])
+        ),
         records: playerProfile.records,
         dailySubCounts: playerDailySubCounts,
       },
@@ -195,6 +211,12 @@ export async function GET(req: NextRequest) {
         todayStanding: selectedGameToday,
         visualisation: gameVisualisation,
         columns: gameModule.getLeaderboardColumns(),
+        stats: buildGameStats(
+          validGameSlug,
+          allSubmissions.filter(
+            (s) => s.gameSlug === validGameSlug && s.leagueDate >= period.startDate && s.leagueDate <= period.endDate
+          )
+        ),
       },
     });
   } catch (err: unknown) {

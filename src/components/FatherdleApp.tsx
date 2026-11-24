@@ -47,6 +47,8 @@ import {
 } from "./Charts";
 import { HighlightBlocks } from "./HighlightBlocks";
 import { StatsDeck } from "./StatsDeck";
+import { GameStatsView, PlayerGameGrid } from "./GameStats";
+import type { GameStatsPanel } from "@/lib/analytics/game-stats";
 import type { GroupStats } from "@/lib/analytics/group-stats";
 import { GameIcon, GAME_ICON, gameGradient, CountUp } from "./ui";
 import { PasteResultModal } from "./PasteResultModal";
@@ -84,6 +86,7 @@ interface LeagueApiResponse {
     player: Player;
     standingRow: PlayerStandingRow | null;
     strengths: PlayerGameStrengthRow[];
+    gameStats: Record<string, GameStatsPanel>;
     records: PlayerRecordItem[];
     dailySubCounts: Record<string, number>;
   };
@@ -92,6 +95,7 @@ interface LeagueApiResponse {
     todayStanding: DailyGameStanding;
     visualisation: GameVisualisationData;
     columns: LeaderboardColumn[];
+    stats: GameStatsPanel;
   };
 }
 
@@ -154,7 +158,7 @@ export function FatherdleApp({
   const [shareWeek, setShareWeek] = useState<LeagueWeek | null>(null);
   const [todayView, setTodayView] = useState<"today" | "week" | "leagues">("today");
   const [feedFilter, setFeedFilter] = useState<GameSlug | "all">("all");
-  const [feedLimit, setFeedLimit] = useState(20);
+  const [feedLimit, setFeedLimit] = useState(60);
   const [dismissedBanner, setDismissedBanner] = useState("");
 
   const customKey = preset === "custom" ? `${customStart}|${customEnd}` : "";
@@ -167,7 +171,7 @@ export function FatherdleApp({
         gameSlug: selectedGameSlug,
       });
       if (gameDate) params.set("gameDate", gameDate);
-      if (feedLimit !== 20) params.set("feedLimit", String(feedLimit));
+      if (feedLimit !== 60) params.set("feedLimit", String(feedLimit));
       if (preset === "custom" && customStart && customEnd) {
         params.set("start", customStart);
         params.set("end", customEnd);
@@ -674,7 +678,7 @@ export function FatherdleApp({
             hasMore={data.feed.hasMore}
             viewerId={hasJoined ? currentUserId : ""}
             geoguessrPlayed={data.feed.geoguessrPlayed}
-            onMore={() => setFeedLimit((n) => n + 20)}
+            onMore={() => setFeedLimit((n) => n + 40)}
             filter={feedFilter}
             onFilter={setFeedFilter}
             games={data.games.map((g) => ({ slug: g.slug, name: g.name, color: g.color }))}
@@ -920,43 +924,38 @@ export function FatherdleApp({
                 ) : (
                   <>
                 {todayView === "today" && banner}
-                <div>
-                  {standings.map((row) => {
+                <div className="space-y-2">
+                  {standings.map((row, idx) => {
                     const isMe = row.player.id === currentUserId;
                     const played = row.gamesPlayed > 0;
+                    const pct = played ? Math.max(42, (row.totalPoints / maxPts) * 100) : 42;
                     return (
-                      <div
-                        key={row.player.id}
-                        className="flex items-center gap-3.5 h-[56px] border-b border-line last:border-b-0"
-                      >
-                        <span
-                          className={`font-serif text-[34px] w-[26px] leading-none ${
-                            row.rank === 1 && played ? "text-lime" : "text-text"
-                          }`}
-                        >
+                      <div key={row.player.id} className="flex items-center gap-2.5 h-[56px]">
+                        <span className={`font-serif text-[28px] w-5 leading-none ${row.rank === 1 && played ? "text-lime" : "text-muted"}`}>
                           {row.rank}
                         </span>
-                        <span
-                          style={{ backgroundColor: played ? row.player.color : "#948F84" }}
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => openPlayer(row.player.id)}
-                          className="flex-1 min-w-0 text-left"
-                        >
-                          <div className="text-[18px] font-bold leading-tight truncate">
-                            {row.player.name}
-                            {isMe ? " (you)" : ""}
-                          </div>
-                          <div className="text-[12px] text-muted">{submittedLabel(row)}</div>
-                        </button>
-                        <span
-                          className={`font-serif text-[34px] leading-none tabular-nums ${
-                            played ? "text-text" : "text-muted"
-                          }`}
-                        >
-                          {played ? row.totalPoints : "–"}
+                        <div className="flex-1 relative h-[56px]">
+                          <button
+                            type="button"
+                            onClick={() => openPlayer(row.player.id)}
+                            style={{
+                              width: `${pct}%`,
+                              animationDelay: `${idx * 60}ms`,
+                              ...(played ? { backgroundColor: row.player.color } : {}),
+                            }}
+                            className={`grow-in absolute left-0 top-0 h-[56px] rounded-[14px] text-left px-4 flex flex-col justify-center ${
+                              played ? "text-[#121212]" : "text-muted bg-surface"
+                            }`}
+                          >
+                            <div className="text-[16px] font-bold leading-tight truncate">
+                              {row.player.name}
+                              {isMe ? " (you)" : ""}
+                            </div>
+                            <div className={`text-[11px] ${played ? "opacity-70" : ""}`}>{submittedLabel(row)}</div>
+                          </button>
+                        </div>
+                        <span className="font-serif text-[34px] leading-none w-[52px] text-right tabular-nums shrink-0">
+                          {played ? <CountUp value={row.totalPoints} /> : <span className="text-muted">–</span>}
                         </span>
                       </div>
                     );
@@ -1992,6 +1991,8 @@ export function FatherdleApp({
                 </div>
               </div>
             </div>
+
+            <PlayerGameGrid strengths={data.playerPage.strengths} gameStats={data.playerPage.gameStats} />
             </div>
             </div>
           </div>
@@ -2103,6 +2104,8 @@ export function FatherdleApp({
                 </button>
               </div>
             </div>
+
+            <GameStatsView slug={data.gamePage.game.slug} stats={data.gamePage.stats} />
 
             {/* Game Specific Callouts */}
             {data.gamePage.visualisation.callouts.length > 0 && (

@@ -761,7 +761,41 @@ export function FeedView({
     return () => clearInterval(t);
   }, []);
 
-  const shown = items.filter((it) => filter === "all" || (it.kind === "result" && it.gameSlug === filter));
+  const [day, setDay] = React.useState<string>("");
+  // One entry per day present in the loaded feed: result count and the player with most 1st places
+  const days = React.useMemo(() => {
+    const map = new Map<string, { date: string; count: number; wins: Map<string, { name: string; color: string; n: number }> }>();
+    for (const it of items) {
+      const d = map.get(it.date) ?? { date: it.date, count: 0, wins: new Map() };
+      if (it.kind === "result") {
+        d.count++;
+        if (it.placement === 1 && it.outOf > 1) {
+          const w = d.wins.get(it.playerId) ?? { name: it.playerName, color: it.playerColor, n: 0 };
+          w.n++;
+          d.wins.set(it.playerId, w);
+        }
+      }
+      map.set(it.date, d);
+    }
+    return [...map.values()]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((d) => ({
+        date: d.date,
+        count: d.count,
+        winner: [...d.wins.values()].sort((a, b) => b.n - a.n)[0] ?? null,
+      }));
+  }, [items]);
+  const dayParts = (date: string) => {
+    const dt = new Date(`${date}T12:00:00Z`);
+    return {
+      num: dt.getUTCDate(),
+      wd: dt.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }),
+    };
+  };
+  const shown = items.filter(
+    (it) =>
+      (filter === "all" || (it.kind === "result" && it.gameSlug === filter)) && (!day || it.date === day)
+  );
   const groups: Array<{ date: string; items: FeedItem[] }> = [];
   for (const it of shown) {
     const last = groups[groups.length - 1];
@@ -808,8 +842,76 @@ export function FeedView({
         </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-[1fr_440px] lg:gap-8 space-y-6 lg:space-y-0">
-        <div className="space-y-4">
+      {/* Phone: seven-day strip */}
+      <div className="lg:hidden flex gap-2 overflow-x-auto -mx-5 px-5 pb-1">
+        {days.slice(0, 7).map((d) => {
+          const { num, wd } = dayParts(d.date);
+          const sel = day === d.date;
+          return (
+            <button
+              key={d.date}
+              type="button"
+              onClick={() => setDay(sel ? "" : d.date)}
+              className={`shrink-0 w-[52px] rounded-[16px] py-2 flex flex-col items-center gap-0.5 ${
+                sel ? "bg-surface2 outline outline-1 outline-lime" : "bg-surface"
+              }`}
+            >
+              <span className="font-serif text-[24px] leading-none">{num}</span>
+              <span className="text-[11px] text-muted">{wd}</span>
+              <span style={{ backgroundColor: d.winner?.color ?? "#2A2A27" }} className="w-2 h-2 rounded-full mt-0.5" />
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="lg:grid lg:grid-cols-[288px_minmax(0,1fr)_400px] lg:gap-6 space-y-6 lg:space-y-0">
+        {/* Desktop: date rail */}
+        <aside className="hidden lg:block self-start sticky top-24 bg-surface rounded-[24px] p-3 space-y-1">
+          <button
+            type="button"
+            onClick={() => setDay("")}
+            className={`rail-item w-full flex items-center justify-between px-3 py-2.5 rounded-[14px] text-left ${
+              !day ? "bg-surface2 outline outline-1 outline-lime" : ""
+            }`}
+          >
+            <span className="text-[14px] font-semibold">All days</span>
+            <span className="text-[12px] text-muted">{items.filter((i) => i.kind === "result").length} results</span>
+          </button>
+          {days.map((d) => {
+            const { num, wd } = dayParts(d.date);
+            return (
+              <button
+                key={d.date}
+                type="button"
+                onClick={() => setDay(d.date)}
+                className={`rail-item w-full flex items-center gap-3 px-3 py-2.5 rounded-[14px] text-left ${
+                  day === d.date ? "bg-surface2 outline outline-1 outline-lime" : ""
+                }`}
+              >
+                <span className="font-serif text-[30px] leading-none w-9">{num}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-semibold">{d.date === todayDate ? "Today" : wd}</span>
+                  <span className="block text-[12px] text-muted">{d.count} results</span>
+                </span>
+                {d.winner && (
+                  <span
+                    title={`${d.winner.name} led`}
+                    style={{ backgroundColor: d.winner.color }}
+                    className="w-7 h-7 rounded-full text-[#121212] text-[12px] font-bold flex items-center justify-center"
+                  >
+                    {d.winner.name[0]}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {hasMore && (
+            <button type="button" onClick={onMore} className="w-full px-3 py-2.5 text-left text-[13px] font-semibold text-muted hover:text-text">
+              Earlier days…
+            </button>
+          )}
+        </aside>
+        <div className="space-y-4 min-w-0">
           {groups.length === 0 && (
             <div className="bg-surface rounded-[22px] p-8 text-center text-muted text-[15px]">
               Nothing here yet. Results show up as soon as they&apos;re pasted.
@@ -852,7 +954,7 @@ export function FeedView({
           )}
         </div>
 
-        <aside className="hidden lg:block space-y-5 self-start sticky top-24">
+        <aside className="space-y-5 self-start lg:sticky lg:top-24">
           <div className="bg-surface rounded-[22px] p-6 space-y-4">
             <div className="flex items-baseline justify-between">
               <h3 className="text-[24px] font-extrabold">Today so far</h3>
@@ -876,7 +978,7 @@ export function FeedView({
               </div>
             ))}
           </div>
-          <div className="bg-lime text-[#121212] rounded-[22px] p-6 space-y-3">
+          <div className="hidden lg:block bg-lime text-[#121212] rounded-[22px] p-6 space-y-3">
             <h3 className="text-[24px] font-extrabold">Played today?</h3>
             <p className="text-[14px] opacity-80">Paste your result and it shows up here for everyone.</p>
             <button
