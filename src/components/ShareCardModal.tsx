@@ -15,7 +15,11 @@ import {
   leagueCurrentOps,
   leagueFinalOps,
   playerStatsOps,
+  playerDayOps,
+  groupDayOps,
+  gameCardOps,
 } from "@/lib/share-scene";
+import type { GameStatsPanel } from "@/lib/analytics/game-stats";
 import type { LeagueWeek } from "@/lib/analytics/feed";
 
 function playerNameSize(name: string): number {
@@ -51,17 +55,24 @@ export function ShareCardModal({
   period,
   dayGames,
   week,
+  dayStandings,
+  gameStanding,
+  gameStats,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  mode: "league" | "final" | "day" | "player";
+  mode: "league" | "final" | "day" | "player" | "game";
   playerRow: PlayerStandingRow;
   allStandings: PlayerStandingRow[];
   period: DatePeriod;
   dayGames?: DailyGameStanding[];
   week?: LeagueWeek;
+  dayStandings?: PlayerStandingRow[];
+  gameStanding?: DailyGameStanding;
+  gameStats?: GameStatsPanel;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const [wholeDay, setWholeDay] = useState(false);
 
   if (!isOpen) return null;
 
@@ -112,13 +123,72 @@ export function ShareCardModal({
     .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
     .toUpperCase();
 
+  const gamesTotal = (dayGames ?? []).length;
   const sceneOps: Op[] =
-    week && mode === "final"
+    mode === "game" && gameStanding
+      ? gameCardOps({
+          name: GAMES[gameStanding.gameSlug].name,
+          slug: gameStanding.gameSlug,
+          rangeLabel: dayLabel,
+          kpis: [
+            [String(gameStanding.submissionCount), "results"],
+            [String(gameStanding.totalPlayers), "players"],
+            [gameStanding.status === "Qualified" ? "Counts" : "Pending", "status"],
+            [gameStanding.rankings[0]?.displayResult ?? "–", "best result"],
+          ],
+          leaderboard: gameStanding.rankings.map((r) => ({
+            name: r.playerName,
+            color: r.playerColor,
+            result: r.displayResult,
+            points: Math.max(1, r.leaguePoints || gameStanding.rankings.length - r.placement + 1),
+          })),
+          distribution: gameStats?.distributions[0] ?? null,
+        })
+      : mode === "day" && wholeDay
+      ? groupDayOps({
+          dateLabel: dayLabel,
+          counted: (dayGames ?? []).filter((g) => g.status === "Qualified").length,
+          totalGames: gamesTotal,
+          players: (dayStandings ?? []).map((r) => ({
+            playerId: r.player.id,
+            name: r.player.name,
+            color: r.player.color,
+            points: r.totalPoints,
+            rank: r.rank,
+            played: r.gamesPlayed > 0,
+            gamesPlayed: r.gamesPlayed,
+            qualifiedGames: r.qualifiedGamesPlayed,
+            firstPlaces: r.firstPlaces,
+          })),
+          games: (dayGames ?? []).map((g) => ({
+            name: GAMES[g.gameSlug].name,
+            slug: g.gameSlug,
+            submitted: g.submissionCount,
+            of: g.totalPlayers,
+            counted: g.status === "Qualified",
+          })),
+        })
+      : mode === "day"
+      ? playerDayOps({
+          name: playerRow.player.name,
+          dateLabel: dayLabel,
+          rank: playerRow.rank,
+          points: playerRow.totalPoints,
+          gamesTotal,
+          rows: dayRows.map((r) => ({
+            name: r.game.name,
+            slug: r.key,
+            placement: r.placement,
+            outOf: r.outOf,
+            points: r.points,
+            counts: r.counts,
+          })),
+        })
+      : week && mode === "final"
       ? leagueFinalOps(week)
       : week && mode === "league"
       ? leagueCurrentOps(week)
-      : mode === "player"
-      ? playerStatsOps({
+      : playerStatsOps({
           name: playerRow.player.name,
           color: playerRow.player.color,
           rank: playerRow.rank,
@@ -133,8 +203,7 @@ export function ShareCardModal({
             slug,
             points: pts,
           })),
-        })
-      : [];
+        });
 
   const handleDownloadSvgCard = async (useWebShare = false) => {
     // Make sure the brand fonts are ready before painting to canvas.
@@ -304,21 +373,28 @@ export function ShareCardModal({
           </div>
         </div>
 
-        {sceneOps.length > 0 ? (
-          <ScaledCard>
-            <SceneView ops={sceneOps} />
-          </ScaledCard>
-        ) : (
-          <ScaledCard>
-            <DayCard
-              playerName={playerRow.player.name}
-              rank={playerRow.rank}
-              points={playerRow.totalPoints}
-              dayLabel={dayLabel}
-              rows={dayRows}
-            />
-          </ScaledCard>
+        {mode === "day" && (
+          <div className="flex gap-2 justify-center">
+            {[
+              [false, "My day"],
+              [true, "Whole day"],
+            ].map(([v, l]) => (
+              <button
+                key={String(l)}
+                type="button"
+                onClick={() => setWholeDay(v as boolean)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold ${
+                  wholeDay === v ? "bg-text text-[#121212]" : "border border-line text-muted"
+                }`}
+              >
+                {l as string}
+              </button>
+            ))}
+          </div>
         )}
+        <ScaledCard>
+          <SceneView ops={sceneOps} />
+        </ScaledCard>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import React from "react";
 import { ChevronRight, ClipboardPaste, MoreHorizontal, Share2, Trash2, X } from "lucide-react";
 import { GAMES } from "@/lib/constants";
-import { GameIcon } from "./ui";
+import { GameIcon, Confetti } from "./ui";
 import type { FeedItem, FeedResultItem, LeagueWeek } from "@/lib/analytics/feed";
 import type { GameSlug, Player, PlayerStandingRow } from "@/lib/types";
 
@@ -53,7 +53,8 @@ export function MondayBanner({
   const places = ["1st", "2nd", "3rd"];
 
   return (
-    <div className="relative bg-text text-[#121212] rounded-[24px] md:rounded-[28px] p-5 md:px-9 md:py-7">
+    <div className="relative overflow-hidden bg-text text-[#121212] rounded-[24px] md:rounded-[28px] p-5 md:px-9 md:py-7">
+      <Confetti />
       <button
         type="button"
         aria-label="Dismiss"

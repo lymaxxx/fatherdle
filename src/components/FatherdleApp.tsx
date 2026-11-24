@@ -121,7 +121,14 @@ export function FatherdleApp({
   initialGameSlug?: GameSlug;
 } = {}) {
   const [activeTab, setActiveTab] = useState<NavTab>(initialTab ?? "today");
-  const [preset, setPreset] = useState<PeriodPreset>("week");
+  // Each page keeps its own time range (HANDOVER §3): All time on Statistics and Games, This week elsewhere.
+  const [presetByTab, setPresetByTab] = useState<Partial<Record<NavTab, PeriodPreset>>>({
+    statistics: "all",
+    games: "all",
+    players: "week",
+  });
+  const preset: PeriodPreset = presetByTab[activeTab] ?? "week";
+  const setPreset = (v: PeriodPreset) => setPresetByTab((m) => ({ ...m, [activeTab]: v }));
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
@@ -154,7 +161,7 @@ export function FatherdleApp({
     setIsJoinModalOpen(true);
   };
   const [newPlayerName, setNewPlayerName] = useState("");
-  const [shareModalMode, setShareModalMode] = useState<"league" | "final" | "day" | "player" | null>(null);
+  const [shareModalMode, setShareModalMode] = useState<"league" | "final" | "day" | "player" | "game" | null>(null);
   const [shareWeek, setShareWeek] = useState<LeagueWeek | null>(null);
   const [todayView, setTodayView] = useState<"today" | "week" | "leagues">("today");
   const [feedFilter, setFeedFilter] = useState<GameSlug | "all">("all");
@@ -2096,11 +2103,11 @@ export function FatherdleApp({
                 </span>
                 <button
                   type="button"
-                  onClick={() => setShareModalMode("day")}
-                  className="mt-1 px-4 py-2.5 rounded-full bg-[#121212] text-text text-[13px] font-bold inline-flex items-center gap-2 hover:opacity-90 whitespace-nowrap self-start sm:self-end"
+                  onClick={() => setShareModalMode("game")}
+                  className="btn-primary mt-1 px-4 py-2.5 rounded-full bg-[#121212] text-text text-[13px] font-bold inline-flex items-center gap-2 whitespace-nowrap self-start sm:self-end"
                 >
                   <Share2 className="w-4 h-4" />
-                  <span>Share my day</span>
+                  <span>Share this game</span>
                 </button>
               </div>
             </div>
@@ -2557,8 +2564,17 @@ export function FatherdleApp({
               : currentUserStandingRow
           }
           allStandings={data.stats.standings}
-          period={shareModalMode === "day" ? { ...data.period, endDate: data.todayDate } : data.period}
+          period={
+            shareModalMode === "day"
+              ? { ...data.period, endDate: data.todayDate }
+              : shareModalMode === "game"
+              ? { ...data.period, endDate: gameDate || data.todayDate }
+              : data.period
+          }
           dayGames={data.today.games}
+          dayStandings={data.today.standings}
+          gameStanding={data.gamePage.todayStanding}
+          gameStats={data.gamePage.stats}
           week={shareModalMode === "final" ? shareWeek ?? undefined : data.leagues.current}
         />
       )}

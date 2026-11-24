@@ -327,6 +327,178 @@ export function playerStatsOps(p: PlayerStatsInput): Op[] {
   return ops;
 }
 
+interface GameTile {
+  name: string;
+  slug?: string;
+  big: string; // serif value
+  sub?: string;
+  dim?: boolean;
+}
+
+/** Game tiles sized by result: top three form a staggered, bottom-aligned podium row with the game
+ *  gradients; everything else is a plain dark tile in two smaller tiers; dimmed tiles are smallest. */
+function gameTiles(tiles: GameTile[], top: number, bottom: number, k = 1): Op[] {
+  const ops: Op[] = [];
+  const podium = tiles.filter((t) => !t.dim).slice(0, 3);
+  const rest = tiles.filter((t) => !podium.includes(t));
+  const widths = [380, 300, 252];
+  const heights = [230, 188, 150].map((h) => Math.round(h * k));
+  const baseY = top + heights[0];
+  let x = 56;
+  podium.forEach((t, i) => {
+    const y = baseY - heights[i];
+    const icon = t.slug ? GAME_ICON[t.slug] : undefined;
+    const fg = icon?.fg ?? INK;
+    ops.push({ t: "rect", x, y, w: widths[i], h: heights[i], fill: icon?.from ?? "#E6EB5E", grad: icon ? [icon.from, icon.to] : undefined, r: 24 });
+    ops.push({ t: "text", x: x + 22, top: y + 18, lh: 30, text: clip(t.name, i === 0 ? 20 : 15), size: 24, weight: 700, color: fg });
+    const bigS = Math.max(30, Math.min(68, heights[i] - 92));
+    ops.push({ t: "text", x: x + 22, top: y + heights[i] - bigS - 42, lh: bigS, text: t.big, size: bigS, weight: 400, color: fg, serif: true });
+    if (t.sub) ops.push({ t: "text", x: x + 24, top: y + heights[i] - 40, lh: 24, text: t.sub, size: 19, weight: 600, color: fg });
+    x += widths[i] + 12;
+  });
+  // Plain tiles: first tier 3 across, second tier 4 across, shrinking to fit the space left
+  const avail = bottom - (baseY + 20);
+  const tier1 = rest.filter((t) => !t.dim).slice(0, 3);
+  const tier2 = rest.filter((t) => !tier1.includes(t));
+  let y = baseY + 20;
+  const place = (list: GameTile[], perRow: number, h: number, nameSize: number, bigSize: number) => {
+    const w = Math.floor((968 - (perRow - 1) * 12) / perRow);
+    list.forEach((t, i) => {
+      const col = i % perRow;
+      const row = Math.floor(i / perRow);
+      const tx = 56 + col * (w + 12);
+      const ty = y + row * (h + 12);
+      if (ty + h > bottom) return;
+      ops.push({ t: "rect", x: tx, y: ty, w, h, fill: SURFACE, r: 16 });
+      ops.push({ t: "text", x: tx + 16, top: ty + 8, lh: nameSize + 4, text: clip(t.name, perRow === 3 ? 16 : 13), size: nameSize, weight: 600, color: t.dim ? "#5d5a52" : MUTED });
+      ops.push({ t: "text", x: tx + 16, top: ty + h - bigSize - 8, lh: bigSize, text: t.big, size: bigSize, weight: 400, color: t.dim ? "#5d5a52" : TEXT, serif: true });
+    });
+    y += Math.ceil(list.length / perRow) * (h + 12);
+  };
+  void avail;
+  place(tier1, 3, k < 1 ? 80 : 88, 18, 38);
+  if (tier2.length) place(tier2, 5, k < 1 ? 56 : 64, 14, 26);
+  return ops;
+}
+
+const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+
+export interface GroupDayInput {
+  dateLabel: string;
+  counted: number;
+  totalGames: number;
+  players: LeagueWeek["standings"];
+  games: Array<{ name: string; slug: string; submitted: number; of: number; counted: boolean }>;
+}
+
+/** The whole group's day: points today and every game ordered by turnout. */
+export function groupDayOps(d: GroupDayInput): Op[] {
+  const leader = d.players[0];
+  const ordered = [...d.games].sort((a, b) => b.submitted - a.submitted);
+  return [
+    ...frame("blue", d.dateLabel, "Today’s table", `${d.counted} ${plural(d.counted, "game")} counted`),
+    ...kpis(380, [
+      [String(d.players.filter((p) => p.played).length), "players today"],
+      [String(d.counted), "games counted"],
+      [String(ordered.filter((g) => g.submitted > 0).length), "games played"],
+      [String(leader && leader.points > 0 ? leader.points : 0), "top score"],
+    ]),
+    label(550, "Points today"),
+    ...bars(d.players.filter((p) => p.played).slice(0, 3), 584, 50, 150, 42, leader?.points ?? 1),
+    label(752, "Games by turnout"),
+    ...gameTiles(
+      ordered.map((g) => ({
+        name: g.name,
+        slug: g.slug,
+        big: `${g.submitted}/${g.of}`,
+        sub: g.counted ? "counted" : g.submitted ? "pending" : "",
+        dim: g.submitted === 0,
+      })),
+      788,
+      1232,
+      0.85
+    ),
+    ...pills([d.dateLabel, `${d.counted} counted`, "Fatherdle league"]),
+  ];
+}
+
+export interface PlayerDayInput {
+  name: string;
+  dateLabel: string;
+  rank: number;
+  points: number;
+  rows: Array<{ name: string; slug: string; placement: number; outOf: number; points: number; counts: boolean }>;
+  gamesTotal: number;
+}
+
+export function playerDayOps(d: PlayerDayInput): Op[] {
+  const best = d.rows.filter((r) => r.placement === 1).length;
+  const ordered = [...d.rows].sort((a, b) => a.placement - b.placement || b.outOf - a.outOf);
+  return [
+    ...frame("pink", d.dateLabel, d.name, `${ordinalOf(d.rank)} place · ${d.points} ${plural(d.points, "point")} today`, 120),
+    ...kpis(380, [
+      [ordinalOf(d.rank), "today’s position"],
+      [String(d.points), "points"],
+      [String(d.rows.length), "games played"],
+      [String(best), best === 1 ? "first place" : "first places"],
+    ]),
+    label(550, "Every game"),
+    ...gameTiles(
+      ordered.map((r) => ({
+        name: r.name,
+        slug: r.slug,
+        big: ordinalOf(r.placement),
+        sub: `of ${r.outOf}${r.counts ? ` · +${r.points}` : " · pending"}`,
+      })),
+      586,
+      1232
+    ),
+    ...pills([d.dateLabel, `${d.rows.length} of ${d.gamesTotal} played`, "Fatherdle league"]),
+  ];
+}
+
+export interface GameCardInput {
+  name: string;
+  slug: string;
+  rangeLabel: string;
+  kpis: Array<[string, string]>;
+  leaderboard: Array<{ name: string; color: string; result: string; points: number }>;
+  distribution: { title: string; bars: Array<{ label: string; value: number }> } | null;
+}
+
+export function gameCardOps(d: GameCardInput): Op[] {
+  const icon = GAME_ICON[d.slug];
+  const ops: Op[] = [
+    ...frame("yellow", d.rangeLabel.toUpperCase(), d.name, "game leaderboard", 108),
+    ...kpis(380, d.kpis.slice(0, 4) as Array<[string, string]>),
+    label(560, "Leaderboard"),
+  ];
+  const rows = d.leaderboard.slice(0, 6);
+  const max = Math.max(1, ...rows.map((r) => r.points));
+  rows.forEach((r, i) => {
+    const y = 596 + i * 60;
+    const w = Math.max(360, Math.round((r.points / max) * 968));
+    ops.push({ t: "rect", x: 56, y, w, h: 50, fill: r.color, r: 12 });
+    ops.push({ t: "text", x: 76, top: y + 8, lh: 34, text: r.name, size: 26, weight: 700, color: INK });
+    ops.push({ t: "text", x: 56 + w - 20 - 240, top: y + 6, lh: 38, text: r.result, size: 34, weight: 400, color: INK, serif: true, align: "right", w: 240 });
+  });
+  if (d.distribution) {
+    ops.push(label(980, d.distribution.title));
+    const bars = d.distribution.bars.slice(0, 11);
+    const max2 = Math.max(1, ...bars.map((b) => b.value));
+    const bw = Math.floor((968 - (bars.length - 1) * 10) / bars.length);
+    bars.forEach((b, i) => {
+      const h = Math.max(6, Math.round((b.value / max2) * 150));
+      const x = 56 + i * (bw + 10);
+      ops.push({ t: "rect", x, y: 1190 - h, w: bw, h, fill: icon?.from ?? "#FFD93D", grad: icon ? [icon.from, icon.to] : undefined, r: [8, 8, 0, 0] });
+      ops.push({ t: "text", x, top: 1196, lh: 22, text: b.label, size: 17, weight: 600, color: MUTED, align: "right", w: bw });
+      if (b.value) ops.push({ t: "text", x, top: 1190 - h - 26, lh: 22, text: String(b.value), size: 18, weight: 700, color: TEXT, align: "right", w: bw });
+    });
+  }
+  ops.push(...pills([d.rangeLabel, `${d.leaderboard.length} ${plural(d.leaderboard.length, "player")}`, "Fatherdle league"]));
+  return ops;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Canvas renderer
 // ---------------------------------------------------------------------------------------------
