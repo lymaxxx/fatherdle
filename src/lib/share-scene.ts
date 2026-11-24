@@ -154,20 +154,21 @@ function bars(
     ops.push({
       t: "text",
       x: 76,
-      top: y + (h - 34) / 2,
-      lh: 34,
+      top: y + (h - Math.min(34, Math.round(h * 0.75))) / 2,
+      lh: Math.min(34, Math.round(h * 0.75)),
       text: r.name,
-      size: 28,
+      size: Math.min(28, Math.floor(h * 0.62)),
       weight: 800,
       color: INK,
     });
+    const scoreSize = Math.min(52, Math.floor(h * 0.86));
     ops.push({
       t: "text",
       x: 56 + w - 20 - 120,
-      top: y + (h - 52) / 2,
-      lh: 52,
+      top: y + (h - scoreSize) / 2,
+      lh: scoreSize,
       text: String(r.points),
-      size: 52,
+      size: scoreSize,
       weight: 400,
       color: INK,
       serif: true,
@@ -463,6 +464,8 @@ export interface GameCardInput {
   rangeLabel: string;
   kpis: Array<[string, string]>;
   leaderboard: Array<{ name: string; color: string; result: string; points: number }>;
+  leaderboardLabel?: string;
+  footer?: string[];
   distribution: { title: string; bars: Array<{ label: string; value: number }> } | null;
 }
 
@@ -471,7 +474,7 @@ export function gameCardOps(d: GameCardInput): Op[] {
   const ops: Op[] = [
     ...frame("yellow", d.rangeLabel.toUpperCase(), d.name, "game leaderboard", 108),
     ...kpis(380, d.kpis.slice(0, 4) as Array<[string, string]>),
-    label(560, "Leaderboard"),
+    label(560, d.leaderboardLabel ?? "Leaderboard"),
   ];
   const rows = d.leaderboard.slice(0, 6);
   const max = Math.max(1, ...rows.map((r) => r.points));
@@ -495,7 +498,7 @@ export function gameCardOps(d: GameCardInput): Op[] {
       if (b.value) ops.push({ t: "text", x, top: 1190 - h - 26, lh: 22, text: String(b.value), size: 18, weight: 700, color: TEXT, align: "right", w: bw });
     });
   }
-  ops.push(...pills([d.rangeLabel, `${d.leaderboard.length} ${plural(d.leaderboard.length, "player")}`, "Fatherdle league"]));
+  ops.push(...pills(d.footer ?? [d.rangeLabel, `${d.leaderboard.length} ${plural(d.leaderboard.length, "player")}`, "Fatherdle league"]));
   return ops;
 }
 

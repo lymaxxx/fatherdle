@@ -1880,8 +1880,6 @@ export function FatherdleApp({
           period={
             shareModalMode === "day"
               ? { ...data.period, endDate: data.todayDate }
-              : shareModalMode === "game"
-              ? { ...data.period, endDate: gameDate || data.todayDate }
               : data.period
           }
           dayGames={data.today.games}

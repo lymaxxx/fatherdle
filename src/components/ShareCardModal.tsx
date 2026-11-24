@@ -46,6 +46,8 @@ function formatOrdinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
+const plural = (n: number, w: string) => (n === 1 ? w : `${w}s`);
+
 export function ShareCardModal({
   isOpen,
   onClose,
@@ -126,24 +128,30 @@ export function ShareCardModal({
   const gamesTotal = (dayGames ?? []).length;
   const sceneOps: Op[] =
     mode === "game" && gameStanding
-      ? gameCardOps({
-          name: gameOf(gameStanding.gameSlug).name,
-          slug: gameStanding.gameSlug,
-          rangeLabel: dayLabel,
-          kpis: [
-            [String(gameStanding.submissionCount), "results"],
-            [String(gameStanding.totalPlayers), "players"],
-            [gameStanding.status === "Qualified" ? "Counts" : "Pending", "status"],
-            [gameStanding.rankings[0]?.displayResult ?? "–", "best result"],
-          ],
-          leaderboard: gameStanding.rankings.map((r) => ({
-            name: r.playerName,
-            color: r.playerColor,
-            result: r.displayResult,
-            points: Math.max(1, r.leaguePoints || gameStanding.rankings.length - r.placement + 1),
-          })),
-          distribution: gameStats?.distributions[0] ?? null,
-        })
+      ? (() => {
+          const slug = gameStanding.gameSlug;
+          const rangeLabel = (period.preset === "all" ? "All time" : period.label).toUpperCase();
+          const board = allStandings
+            .map((r) => ({ name: r.player.name, color: r.player.color, pts: r.pointsByGame[slug] ?? 0 }))
+            .filter((r) => r.pts > 0)
+            .sort((x, y) => y.pts - x.pts);
+          const k = gameStats?.kpis ?? [];
+          const players = board.length;
+          return gameCardOps({
+            name: gameOf(slug).name,
+            slug,
+            rangeLabel,
+            kpis: [
+              [String(gameStats?.results ?? 0), "results"],
+              [String(players), plural(players, "player")],
+              ...k.slice(0, 2).map((x) => [x.value, x.label] as [string, string]),
+            ].slice(0, 4) as Array<[string, string]>,
+            leaderboard: board.map((r) => ({ name: r.name, color: r.color, result: `${r.pts} pts`, points: r.pts })),
+            leaderboardLabel: "League points in this game",
+            footer: [rangeLabel, `${gameStats?.results ?? 0} results`, "Fatherdle league"],
+            distribution: gameStats?.distributions[0] ?? null,
+          });
+        })()
       : mode === "day" && wholeDay
       ? groupDayOps({
           dateLabel: dayLabel,
