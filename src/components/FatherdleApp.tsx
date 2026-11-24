@@ -46,6 +46,8 @@ import {
   PositionBumpChart,
 } from "./Charts";
 import { HighlightBlocks } from "./HighlightBlocks";
+import { StatsDeck } from "./StatsDeck";
+import type { GroupStats } from "@/lib/analytics/group-stats";
 import { GameIcon, GAME_ICON, gameGradient, CountUp } from "./ui";
 import { PasteResultModal } from "./PasteResultModal";
 import { ShareCardModal } from "./ShareCardModal";
@@ -55,6 +57,7 @@ export type NavTab = "today" | "statistics" | "games" | "players" | "onboarding"
 interface LeagueApiResponse {
   todayDate: string;
   leagues: LeaguesPayload;
+  groupStats: GroupStats;
   feed: { items: FeedItem[]; hasMore: boolean; geoguessrPlayed: Record<string, string[]> };
   period: DatePeriod;
   players: Player[];
@@ -1211,14 +1214,7 @@ export function FatherdleApp({
               {renderPeriodSelector()}
             </div>
 
-            {/* 4 Highlight Colour Blocks */}
-            <HighlightBlocks
-              playerRow={currentUserStandingRow}
-              allStandings={data.stats.standings}
-              period={data.period}
-              series={data.stats.timeSeries.series}
-              onShare={() => setShareModalMode("player")}
-            />
+            <StatsDeck stats={data.groupStats} />
 
             {/* Row 1: Standings + Points Over Time */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

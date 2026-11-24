@@ -22,6 +22,7 @@ import {
 } from "@/lib/analytics/engine";
 import { generateAutomaticInsights } from "@/lib/analytics/insights";
 import { buildFeed, buildLeagues } from "@/lib/analytics/feed";
+import { buildGroupStats } from "@/lib/analytics/group-stats";
 import { createGameAnalyticsModule } from "@/lib/analytics/game-modules";
 import { parseMultiGamePaste } from "@/lib/parsers";
 import { ACTIVE_GAME_SLUGS, GAMES } from "@/lib/constants";
@@ -168,6 +169,7 @@ export async function GET(req: NextRequest) {
       todayDate,
       leagues,
       feed,
+      groupStats: buildGroupStats(period.startDate, period.endDate, allSubmissions, players, leagues),
       period,
       players,
       games: Object.values(GAMES).filter((g) => g.slug !== "custom"),
