@@ -6,7 +6,7 @@ import { GAMES } from "@/lib/constants";
 import type { FeedDay, FeedItem, FeedResultItem } from "@/lib/analytics/feed";
 import type { GameSlug, Player, PlayerStandingRow } from "@/lib/types";
 import { GAME_ICON } from "@/lib/game-icons";
-import { GameIcon } from "./ui";
+import { ColumnChart, GameIcon } from "./ui";
 
 // ---------------------------------------------------------------------------------------------
 // Helpers
@@ -109,17 +109,21 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
 
   if (slug === "maptap" && item.rounds) {
     return (
-      <div className="flex items-end gap-1.5 md:gap-2 h-[86px] md:h-[96px]">
-        {item.rounds.map((pts, i) => (
-          <div key={i} className="flex flex-col items-center justify-end h-full gap-1">
-            <span className="text-[10px] md:text-[12px] font-semibold text-orange tabular-nums">{pts}</span>
-            <div
-              style={{ height: `${Math.max(10, pts * 0.55)}%` }}
-              className="chart-bar w-[26px] md:w-[56px] rounded-[4px] bg-orange"
-            />
-            <span className="text-[10px] md:text-[11px] text-muted">R{i + 1}</span>
-          </div>
-        ))}
+      <div className="w-[170px] md:w-[340px]">
+        <ColumnChart
+          height={96}
+          gap={6}
+          radius={4}
+          labelClass="text-[10px] md:text-[11px] text-muted"
+          bars={item.rounds.map((pts, i) => ({
+            label: `R${i + 1}`,
+            // scale from 0–100 so a single round never fills the chart on its own
+            value: pts,
+            color: "#FF8A3D",
+            valueText: pts,
+            valueClass: "text-orange",
+          }))}
+        />
       </div>
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { GameSlug } from "@/lib/types";
 
 import { GAME_ICON, gameGradient } from "@/lib/game-icons";
@@ -72,6 +72,64 @@ export function Confetti({ colors = ["#E6EB5E", "#FF8A3D", "#F2A7C3", "#6FA8DC",
           }}
         />
       ))}
+    </div>
+  );
+}
+
+export interface ColumnBar {
+  label: React.ReactNode;
+  value: number;
+  color: string;
+  valueText?: React.ReactNode; // shown above the bar; defaults to the value (hidden when 0)
+  valueClass?: string;
+  title?: string;
+}
+
+/**
+ * Column chart with pixel heights only (no percentage heights inside flex items), so bars sit
+ * exactly on the baseline in every browser, Safari included.
+ */
+export function ColumnChart({
+  bars,
+  height,
+  showValues = true,
+  minBar = 4,
+  gap = 8,
+  radius = 6,
+  labelClass = "text-[11px] text-muted",
+}: {
+  bars: ColumnBar[];
+  height: number; // total height, labels included
+  showValues?: boolean;
+  minBar?: number;
+  gap?: number;
+  radius?: number;
+  labelClass?: string;
+}) {
+  const valueH = showValues ? 18 : 0;
+  const labelH = 18;
+  const area = Math.max(10, height - valueH - labelH - 6);
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  return (
+    <div className="flex" style={{ height, gap }}>
+      {bars.map((b, i) => {
+        const h = Math.max(minBar, Math.round((b.value / max) * area));
+        return (
+          <div key={i} className="flex-1 min-w-0 flex flex-col" title={b.title}>
+            <div className="flex flex-col justify-end" style={{ height: valueH + area }}>
+              {showValues && (
+                <div
+                  className={`text-center text-[11px] font-semibold tabular-nums leading-[18px] h-[18px] truncate ${b.valueClass ?? "text-muted"}`}
+                >
+                  {b.valueText ?? (b.value ? b.value.toLocaleString("en-GB") : "")}
+                </div>
+              )}
+              <div className="chart-bar w-full shrink-0" style={{ height: h, backgroundColor: b.color, borderRadius: radius }} />
+            </div>
+            <div className={`mt-[6px] text-center truncate leading-[18px] h-[18px] ${labelClass}`}>{b.label}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }

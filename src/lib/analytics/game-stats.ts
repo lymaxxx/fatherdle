@@ -21,11 +21,14 @@ function histogram(values: number[], labels: string[], min: number): Array<{ lab
   return labels.map((label, i) => ({ label, value: values.filter((v) => v === min + i).length }));
 }
 
+const short = (n: number) => (Math.abs(n) >= 10000 ? `${Math.round(n / 100) / 10}k` : String(n));
+
 function bucketed(values: number[], edges: number[], unit = ""): Array<{ label: string; value: number }> {
   return edges.slice(0, -1).map((lo, i) => {
     const hi = edges[i + 1];
     return {
-      label: i === edges.length - 2 ? `${lo}+${unit}` : `${lo}–${hi - 1}${unit}`,
+      // lower bound of each bucket keeps labels short enough for phones
+      label: i === edges.length - 2 ? `${short(lo)}+${unit}` : `${short(lo)}${unit}`,
       value: values.filter((v) => v >= lo && (i === edges.length - 2 || v < hi)).length,
     };
   });
@@ -72,7 +75,11 @@ function evenEdges(values: number[], n = 6): number[] {
 const COLOURS: Record<string, string> = { "🟨": "Yellow", "🟩": "Green", "🟦": "Blue", "🟪": "Purple" };
 
 export function buildGameStats(slug: string, subs: Submission[]): GameStatsPanel {
-  return { results: subs.length, ...buildPanels(slug, subs) };
+  const panels = buildPanels(slug, subs);
+  if (panels.kpis.length < 3) {
+    panels.kpis.push({ label: "players", value: String(new Set(subs.map((s) => s.playerId)).size) });
+  }
+  return { results: subs.length, ...panels };
 }
 
 function buildPanels(slug: string, subs: Submission[]): Omit<GameStatsPanel, "results"> {

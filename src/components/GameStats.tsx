@@ -3,7 +3,7 @@
 import type { GameStatsBar, GameStatsPanel } from "@/lib/analytics/game-stats";
 import type { DailyGameStanding } from "@/lib/types";
 import { GAME_ICON } from "@/lib/game-icons";
-import { GameIcon } from "./ui";
+import { ColumnChart, GameIcon } from "./ui";
 
 const CONNECTION_COLOURS: Record<string, string> = {
   "🟨": "#F9DF6D",
@@ -24,31 +24,28 @@ export function Distribution({
   height?: number;
   compact?: boolean;
 }) {
-  const max = Math.max(1, ...bars.map((b) => b.value));
-  const peak = bars.reduce((best, b, i) => (b.value > bars[best].value ? i : best), 0);
+  // Highlight the most common outcome (never the fail bar, which has its own colour)
+  const peak = bars.reduce(
+    (best, b, i) => (!/^(fail|x)$/i.test(b.label) && b.value > (bars[best]?.value ?? -1) ? i : best),
+    0
+  );
   return (
-    <div className="flex items-end gap-1.5 md:gap-2" style={{ height }}>
-      {bars.map((b, i) => {
+    <ColumnChart
+      height={height}
+      showValues={!compact}
+      gap={compact ? 4 : 8}
+      radius={4}
+      minBar={compact ? 4 : 3}
+      labelClass={compact ? "text-[10px] text-muted" : "text-[11px] font-semibold text-text"}
+      bars={bars.map((b, i) => {
         const fail = /^(fail|x)$/i.test(b.label);
-        const colour = b.color ?? (fail ? "#FF5A1F" : i === (compact ? peak : 0) ? accent : "#2A2A27");
-        return (
-          <div key={b.label} className="flex-1 flex flex-col gap-1.5 h-full min-w-0">
-            <div className={`flex-1 flex flex-col justify-end ${compact ? "" : "pt-5"}`}>
-              {!compact && (
-                <span className="text-[11px] text-muted tabular-nums mb-1">{b.value || ""}</span>
-              )}
-              <div
-                style={{ height: `${Math.max(compact ? 6 : 3, (b.value / max) * 100)}%`, backgroundColor: colour }}
-                className="chart-bar w-full rounded-[4px]"
-              />
-            </div>
-            <span className={`text-[10px] md:text-[11px] font-semibold truncate ${compact ? "text-muted text-center" : "text-text"}`}>
-              {b.label}
-            </span>
-          </div>
-        );
+        return {
+          label: b.label,
+          value: b.value,
+          color: b.color ?? (fail && b.value ? "#FF5A1F" : (i === peak || compact) && b.value ? accent : "#2A2A27"),
+        };
       })}
-    </div>
+    />
   );
 }
 

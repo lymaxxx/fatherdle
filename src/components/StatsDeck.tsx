@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { GroupStats } from "@/lib/analytics/group-stats";
 import { GAMES } from "@/lib/constants";
 import type { GameSlug } from "@/lib/types";
-import { CountUp, GameIcon } from "./ui";
+import { ColumnChart, CountUp, GameIcon } from "./ui";
 
 const WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -89,12 +89,10 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
   }, [n]);
   const card = cards[i % n];
 
-  const maxWd = Math.max(1, ...stats.resultsByWeekday);
   const peakWd = stats.resultsByWeekday.indexOf(Math.max(...stats.resultsByWeekday));
   const most = stats.mostPlayed.slice(0, 7);
   const maxGame = Math.max(1, ...most.map((g) => g.count));
   const leads = stats.leadChangesPerWeek.slice(-9);
-  const maxLead = Math.max(1, ...leads.map((w) => w.value));
   const peakLead = leads.reduce((best, w, k) => (w.value > leads[best].value ? k : best), 0);
   const partPct = stats.participationOverall === null ? null : Math.round(stats.participationOverall * 100);
   const qualPills = 50;
@@ -232,41 +230,46 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 md:gap-5">
         <Panel title="When everyone plays" note="Results by weekday, all players">
-          <div className="flex items-end gap-2 md:gap-3 h-[170px] md:h-[200px]">
-            {stats.resultsByWeekday.map((v, k) => (
-              <div key={k} className="flex-1 flex flex-col gap-1.5 h-full">
-                <div className="flex-1 flex flex-col justify-end">
-                  <span className={`hidden md:block text-[12px] font-semibold text-center mb-1 ${k === peakWd ? "text-lime" : "text-muted"}`}>
-                    {v.toLocaleString("en-GB")}
-                  </span>
-                  <div
-                    style={{ height: `${Math.max(3, (v / maxWd) * 100)}%` }}
-                    className={`chart-bar w-full rounded-[6px] ${k === peakWd ? "bg-lime" : "bg-surface2"}`}
-                  />
-                </div>
-                <span className="text-[11px] md:text-[12px] text-muted text-center">
-                  <span className="md:hidden">{WD[k][0]}</span>
-                  <span className="hidden md:inline">{WD[k]}</span>
-                </span>
-              </div>
-            ))}
+          <div className="md:hidden">
+            <ColumnChart
+              height={170}
+              showValues={false}
+              radius={6}
+              bars={stats.resultsByWeekday.map((v, k) => ({ label: WD[k][0], value: v, color: k === peakWd ? "#E6EB5E" : "#2A2A27" }))}
+            />
+          </div>
+          <div className="hidden md:block">
+            <ColumnChart
+              height={210}
+              gap={12}
+              radius={6}
+              labelClass="text-[12px] text-muted"
+              bars={stats.resultsByWeekday.map((v, k) => ({
+                label: WD[k],
+                value: v,
+                color: k === peakWd ? "#E6EB5E" : "#2A2A27",
+                valueClass: k === peakWd ? "text-lime" : "text-muted",
+              }))}
+            />
           </div>
         </Panel>
         <Panel title="Lead changes" note="Per league week" className="hidden md:block">
-          <div className="flex items-end gap-2 h-[200px]">
-            {leads.length === 0 && <span className="text-muted text-[13px]">No weeks yet</span>}
-            {leads.map((w, k) => (
-              <div key={k} className="flex-1 flex flex-col gap-1.5 h-full" title={w.label}>
-                <div className="flex-1 flex flex-col justify-end">
-                  <div
-                    style={{ height: `${Math.max(4, (w.value / maxLead) * 100)}%` }}
-                    className={`chart-bar w-full rounded-[6px] ${k === peakLead && w.value > 0 ? "bg-orange" : "bg-surface2"}`}
-                  />
-                </div>
-                <span className="text-[12px] text-muted text-center">{w.value}</span>
-              </div>
-            ))}
-          </div>
+          {leads.length === 0 ? (
+            <span className="text-muted text-[13px]">No weeks yet</span>
+          ) : (
+            <ColumnChart
+              height={210}
+              showValues={false}
+              radius={6}
+              labelClass="text-[12px] text-muted"
+              bars={leads.map((w, k) => ({
+                label: w.value,
+                value: w.value,
+                title: w.label,
+                color: k === peakLead && w.value > 0 ? "#FF8A3D" : "#2A2A27",
+              }))}
+            />
+          )}
         </Panel>
       </div>
 

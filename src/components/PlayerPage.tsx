@@ -4,7 +4,7 @@ import type { DailyPointsSeriesPoint, PlayerGameStrengthRow, PlayerRecordItem } 
 import type { LeaguesPayload } from "@/lib/analytics/feed";
 import type { DatePeriod, Player, PlayerStandingRow } from "@/lib/types";
 import { Share2 } from "lucide-react";
-import { CountUp, GameIcon } from "./ui";
+import { ColumnChart, CountUp, GameIcon } from "./ui";
 
 function ordinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
@@ -82,7 +82,6 @@ export function PlayerHero({
     }
     bars = [...byWeek.entries()].slice(-10).map(([w, v]) => ({ label: `w${w}`, value: v }));
   }
-  const maxBar = Math.max(1, ...bars.map((b) => b.value));
   const periodWord =
     period.preset === "today" ? "today" : period.preset === "week" ? "this week" : period.preset === "month" ? "this month" : period.preset === "all" ? "all time" : period.label;
   const best = [...strengths].filter((s) => s.totalPoints > 0).sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 3);
@@ -115,24 +114,22 @@ export function PlayerHero({
           </button>
         </div>
         <div>{periodControl}</div>
-        <div className="flex items-end gap-1.5 md:gap-2.5 h-[120px] md:h-[136px]">
-          {bars.map((b, i) => (
-            <div key={i} className="flex-1 flex flex-col gap-1.5 h-full min-w-0">
-              <div className="flex-1 flex flex-col justify-end">
-                <span className="text-[11px] md:text-[12px] font-bold text-center mb-1">{b.value || ""}</span>
-                <div
-                  style={{ height: `${Math.max(3, (b.value / maxBar) * 100)}%`, backgroundColor: ink === "#121212" ? "#121212" : "#F4F1EA" }}
-                  className="chart-bar w-full rounded-[5px]"
-                />
-              </div>
-              <span className="text-[10px] md:text-[11px] font-semibold text-center opacity-70 truncate">
-                <span className="md:hidden">{b.label.startsWith("w") ? b.label : b.label[0]}</span>
-                <span className="hidden md:inline">{b.label}</span>
-              </span>
-            </div>
-          ))}
-          {bars.length === 0 && <span className="text-[13px] opacity-70">No results in this range yet</span>}
-        </div>
+        {bars.length === 0 ? (
+          <span className="text-[13px] opacity-70 h-[136px] flex items-center">No results in this range yet</span>
+        ) : (
+          <ColumnChart
+            height={150}
+            gap={8}
+            radius={5}
+            labelClass="text-[10px] md:text-[11px] font-semibold opacity-70"
+            bars={bars.map((b) => ({
+              label: b.label.startsWith("w") ? b.label : b.label.slice(0, 3),
+              value: b.value,
+              color: ink === "#121212" ? "#121212" : "#F4F1EA",
+              valueClass: "font-bold",
+            }))}
+          />
+        )}
         <div className="flex items-end justify-between gap-3">
           <div>
             <div className="font-serif text-[64px] md:text-[72px] leading-[0.9]">
@@ -232,7 +229,6 @@ export function PlayerGeneral({
     const r = w.standings.find((x) => x.playerId === player.id);
     return { label: `w${isoWeek(w.startDate)}`, value: r?.points ?? 0, rank: r && r.played ? r.rank : null, current: w === leagues.current };
   });
-  const maxWeek = Math.max(1, ...weekly.map((w) => w.value));
   const allWeeks = [...leagues.previous].filter((w) => w.final);
   const nPlayers = Math.max(1, leagues.current.standings.length);
   const finishCounts = Array.from({ length: nPlayers }, (_, i) =>
@@ -263,28 +259,17 @@ export function PlayerGeneral({
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 md:gap-5">
         <Panel title="Points over time" note={`Last ${weekly.length} league ${weekly.length === 1 ? "week" : "weeks"}`}>
-          <div className="flex items-end gap-2 h-[150px] md:h-[170px]">
-            {weekly.map((w, i) => (
-              <div key={i} className="flex-1 flex flex-col gap-1.5 h-full min-w-0">
-                <div className="flex-1 flex flex-col justify-end">
-                  <span
-                    style={w.current ? { color: player.color } : undefined}
-                    className={`hidden md:block text-[12px] font-bold text-center mb-1 ${w.current ? "" : "text-muted"}`}
-                  >
-                    {w.value}
-                  </span>
-                  <div
-                    style={{ height: `${Math.max(3, (w.value / maxWeek) * 100)}%`, backgroundColor: w.current ? player.color : "#2A2A27" }}
-                    className="chart-bar w-full rounded-[6px]"
-                  />
-                </div>
-                <span className="text-[10px] md:text-[11px] text-muted text-center">
-                  <span className="md:hidden">{w.value}</span>
-                  <span className="hidden md:inline">{w.label}</span>
-                </span>
-              </div>
-            ))}
-          </div>
+          <ColumnChart
+            height={180}
+            radius={6}
+            labelClass="text-[10px] md:text-[11px] text-muted"
+            bars={weekly.map((w) => ({
+              label: w.label,
+              value: w.value,
+              color: w.current ? player.color : "#2A2A27",
+              valueClass: w.current ? "font-bold" : "text-muted",
+            }))}
+          />
         </Panel>
         <div className="hidden md:block">
           <Panel title="League position" note="Finish each week">
