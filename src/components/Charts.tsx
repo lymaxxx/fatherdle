@@ -108,7 +108,7 @@ export function PointsOverTimeChart({
                 textAnchor="end"
                 fill={TOKENS.muted}
                 fontSize={11}
-                fontFamily="DM Sans, sans-serif"
+                fontFamily="Spline Sans, sans-serif"
               >
                 {tick}
               </text>
@@ -132,7 +132,7 @@ export function PointsOverTimeChart({
               textAnchor="middle"
               fill={TOKENS.muted}
               fontSize={11}
-              fontFamily="DM Sans, sans-serif"
+              fontFamily="Spline Sans, sans-serif"
             >
               {pt.label}
             </text>
@@ -271,7 +271,7 @@ export function PositionBumpChart({
                 textAnchor="end"
                 fill={TOKENS.muted}
                 fontSize={11}
-                fontFamily="DM Sans, sans-serif"
+                fontFamily="Spline Sans, sans-serif"
               >
                 {r}
               </text>
@@ -300,7 +300,7 @@ export function PositionBumpChart({
               textAnchor="middle"
               fill={TOKENS.muted}
               fontSize={11}
-              fontFamily="DM Sans, sans-serif"
+              fontFamily="Spline Sans, sans-serif"
             >
               {labelText}
             </text>
@@ -371,7 +371,7 @@ export function PositionBumpChart({
                   fill={player.color}
                   fontSize={12}
                   fontWeight={700}
-                  fontFamily="DM Sans, sans-serif"
+                  fontFamily="Spline Sans, sans-serif"
                 >
                   {player.name}
                 </text>
@@ -701,7 +701,7 @@ export function GameHistoryChart({
                 textAnchor="end"
                 fill={TOKENS.muted}
                 fontSize={11}
-                fontFamily="DM Sans, sans-serif"
+                fontFamily="Spline Sans, sans-serif"
               >
                 {t.toLocaleString("en-GB")}
               </text>
@@ -724,7 +724,7 @@ export function GameHistoryChart({
               textAnchor="middle"
               fill={TOKENS.muted}
               fontSize={11}
-              fontFamily="DM Sans, sans-serif"
+              fontFamily="Spline Sans, sans-serif"
             >
               {pt.label}
             </text>

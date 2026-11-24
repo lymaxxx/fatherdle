@@ -46,6 +46,7 @@ import {
   PositionBumpChart,
 } from "./Charts";
 import { HighlightBlocks } from "./HighlightBlocks";
+import { GameIcon, GAME_ICON, gameGradient, CountUp } from "./ui";
 import { PasteResultModal } from "./PasteResultModal";
 import { ShareCardModal } from "./ShareCardModal";
 
@@ -462,7 +463,7 @@ export function FatherdleApp({
     <div className="min-h-screen bg-bg text-text pb-36 md:pb-16">
       {/* DESKTOP & MOBILE TOP NAV */}
       <header className="sticky top-0 z-30 bg-bg border-b border-line/50">
-        <div className="max-w-[1360px] mx-auto px-5 h-[68px] flex items-center justify-between gap-4">
+        <div className="max-w-[1440px] mx-auto px-5 md:px-12 h-[68px] md:h-[80px] flex items-center justify-between gap-4">
           {/* Wordmark */}
           <div className="flex items-center gap-3">
             <button
@@ -478,7 +479,7 @@ export function FatherdleApp({
           </div>
 
           {/* Center Tabs (Desktop) */}
-          <nav className="hidden md:flex items-center gap-7">
+          <nav className="hidden md:flex items-center gap-9">
             {(
               [
                 { id: "today", label: "League" },
@@ -492,7 +493,8 @@ export function FatherdleApp({
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id)}
-                className={`text-[13px] font-bold transition-colors ${
+                data-active={activeTab === t.id}
+                className={`nav-tab text-[14px] font-semibold ${
                   activeTab === t.id ? "text-text" : "text-muted hover:text-text"
                 }`}
               >
@@ -539,7 +541,7 @@ export function FatherdleApp({
               <button
                 type="button"
                 onClick={() => openJoin("both")}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-line text-[12px] font-bold text-text hover:bg-surface"
+                className="btn-secondary flex items-center gap-1.5 px-5 py-2.5 rounded-full border border-line text-[13px] font-semibold text-text"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>Join the league</span>
@@ -563,7 +565,7 @@ export function FatherdleApp({
             <button
               type="button"
               onClick={() => setIsPasteOpen(true)}
-              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-lime text-[#121212] text-[12px] font-extrabold hover:brightness-95 transition-all"
+              className="btn-primary wobble-twice hidden md:flex items-center gap-2 px-5 py-2.5 rounded-full bg-lime text-[#121212] text-[13px] font-bold"
             >
               <ClipboardPaste className="w-3.5 h-3.5" />
               <span>Paste result</span>
@@ -573,13 +575,13 @@ export function FatherdleApp({
       </header>
 
       {/* MAIN CONTENT CONTAINER */}
-      <main className="max-w-[1360px] mx-auto px-5 pt-7 space-y-7">
+      <main className="max-w-[1440px] mx-auto px-5 md:px-12 pt-7 md:pt-9 space-y-7">
         {/* =========================================================
             1. ONBOARDING / JOIN VIEW (Screen 1)
            ========================================================= */}
         {activeTab === "onboarding" && (
           <div className="max-w-md mx-auto pt-6 pb-44 md:pb-6 space-y-7">
-            <h1 className="text-[56px] font-extrabold tracking-[-2.5px] leading-[0.95] text-text">
+            <h1 className="text-[44px] md:text-[56px] font-bold tracking-[-1.5px] leading-none text-text">
               Daily games.
               <br />
               One table.
@@ -879,7 +881,7 @@ export function FatherdleApp({
               <div className="md:hidden space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
+                    <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
                       League
                     </h1>
                     <p className="text-[14px] text-muted mt-1">{subtitle}</p>
@@ -1021,7 +1023,7 @@ export function FatherdleApp({
               <div className="hidden md:block space-y-7">
                 <div className="flex items-center justify-between gap-6">
                   <div className="space-y-2">
-                    <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
+                    <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
                       League
                     </h1>
                     <p className="text-[16px] text-muted">{subtitle}</p>
@@ -1205,7 +1207,7 @@ export function FatherdleApp({
           <div className="space-y-7">
             {/* Title & Period Selector */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
+              <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
                 Statistics
               </h1>
               {renderPeriodSelector()}
@@ -1983,10 +1985,11 @@ export function FatherdleApp({
            ========================================================= */}
         {activeTab === "games" && (
           <div className="space-y-7">
-            <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">Games</h1>
+            <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">Games</h1>
 
-            {/* Game Selector Strip */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-6 lg:items-start space-y-7 lg:space-y-0">
+            {/* Rail (desktop) */}
+            <aside className="hidden lg:block bg-surface rounded-[24px] p-3 space-y-1 sticky top-[96px] max-h-[calc(100vh-120px)] overflow-y-auto">
               {data.games.map((g) => {
                 const active = g.slug === selectedGameSlug;
                 return (
@@ -1994,29 +1997,48 @@ export function FatherdleApp({
                     key={g.slug}
                     type="button"
                     onClick={() => setSelectedGameSlug(g.slug)}
-                    style={{
-                      backgroundColor: active ? g.color : "#1C1C1B",
-                      color: active ? "#121212" : "#F4F1EA",
-                      borderColor: active ? g.color : "#3A3935",
-                    }}
-                    className="px-4 py-2 rounded-full border text-[13px] font-bold whitespace-nowrap transition-all"
+                    className={`rail-item w-full flex items-center gap-3 px-3 py-2.5 rounded-[14px] text-left ${
+                      active ? "bg-surface2 outline outline-1 outline-lime" : ""
+                    }`}
                   >
-                    {g.name}
+                    <GameIcon slug={g.slug} size={36} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-semibold truncate">{g.name}</span>
+                      <span className="block text-[12px] text-muted truncate">{g.unit}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </aside>
+            {/* Icon strip (phone) */}
+            <div className="lg:hidden flex items-center gap-3 overflow-x-auto pb-1 -mx-5 px-5">
+              {data.games.map((g) => {
+                const active = g.slug === selectedGameSlug;
+                return (
+                  <button
+                    key={g.slug}
+                    type="button"
+                    onClick={() => setSelectedGameSlug(g.slug)}
+                    className={`shrink-0 p-1 rounded-[16px] ${active ? "outline outline-1 outline-lime bg-surface2" : ""}`}
+                    aria-label={g.name}
+                  >
+                    <GameIcon slug={g.slug} size={44} />
                   </button>
                 );
               })}
             </div>
+            <div className="space-y-7 min-w-0">
 
             {/* Period for the history, distribution and player stats below */}
             {renderPeriodSelector()}
 
             {/* Game Coloured Hero Card (5.1) */}
             <div
-              style={{ backgroundColor: data.gamePage.game.color }}
-              className="text-[#121212] rounded-[26px] p-6 sm:p-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6"
+              style={{ background: gameGradient(data.gamePage.game.slug, 120), color: GAME_ICON[data.gamePage.game.slug]?.fg ?? "#121212" }}
+              className="rounded-[24px] p-6 sm:p-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6"
             >
               <div className="space-y-2 min-w-0 flex-1">
-                <h1 className={`font-serif leading-[0.95] tracking-tight break-words ${data.gamePage.game.name.length > 14 ? "text-[30px] sm:text-[48px] lg:text-[60px]" : "text-[44px] sm:text-[64px] lg:text-[72px]"}`}>
+                <h1 className={`font-bold leading-none tracking-[-1.5px] break-words ${data.gamePage.game.name.length > 14 ? "text-[30px] sm:text-[40px] lg:text-[48px]" : "text-[44px] sm:text-[56px]"}`}>
                   {data.gamePage.game.name}
                 </h1>
                 <p className="text-[15px] font-semibold max-w-xl">
@@ -2027,9 +2049,9 @@ export function FatherdleApp({
                     href={data.gamePage.game.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[13px] font-extrabold hover:underline"
+                    className="btn-primary inline-flex items-center gap-1.5 text-[13px] font-bold px-4 py-2 rounded-full bg-[#121212] text-text"
                   >
-                    <span>Official site</span>
+                    <span>Play {data.gamePage.game.name}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
@@ -2364,6 +2386,8 @@ export function FatherdleApp({
                 </table>
               </div>
             </div>
+            </div>
+            </div>
           </div>
         )}
       </main>
@@ -2373,7 +2397,7 @@ export function FatherdleApp({
         <button
           type="button"
           onClick={() => setIsPasteOpen(true)}
-          className="w-full h-[56px] rounded-full bg-lime text-[#121212] text-[15px] font-extrabold flex items-center justify-center gap-2 shadow-lg"
+          className="btn-primary w-full h-[52px] rounded-full bg-lime text-[#121212] text-[15px] font-bold flex items-center justify-center gap-2 shadow-lg"
         >
           <ClipboardPaste className="w-4 h-4" />
           <span>Paste result</span>
@@ -2398,7 +2422,7 @@ export function FatherdleApp({
                   setActiveTab(item.id);
                 }}
                 className={`py-2 rounded-full flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold transition-colors ${
-                  active ? "bg-surface2 text-lime" : "text-muted hover:text-text"
+                  active ? "bg-lime text-[#121212]" : "text-muted hover:text-text"
                 }`}
               >
                 <Icon className="w-4 h-4" />

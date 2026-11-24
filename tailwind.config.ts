@@ -24,10 +24,10 @@ const config: Config = {
         pink: "#F2A7C3",
         teal: "#5CC8B0",
         brown: "#B8794F",
-        violet: "#B388FF",
+        violet: "#B79CF5",
       },
       fontFamily: {
-        sans: ['"DM Sans"', "system-ui", "sans-serif"],
+        sans: ['"Spline Sans"', "system-ui", "sans-serif"],
         serif: ['"Instrument Serif"', "Georgia", "serif"],
       },
     },

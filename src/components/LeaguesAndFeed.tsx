@@ -773,7 +773,7 @@ export function FeedView({
     <div className="space-y-6">
       <div className="md:flex md:items-center md:justify-between md:gap-6 space-y-4 md:space-y-0">
         <div className="flex items-center justify-between md:justify-start md:gap-4">
-          <h1 className="text-[36px] md:text-[64px] font-extrabold tracking-[-1.4px] md:tracking-[-2.5px] leading-none">
+          <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
             Feed
           </h1>
           <span className="inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-lime text-lime px-3 py-1 text-[12px] md:text-[13px] font-extrabold">

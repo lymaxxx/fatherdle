@@ -286,7 +286,7 @@ function persist(data: LeagueData): Promise<void> {
   return writeChain;
 }
 
-const SEED_PALETTE = ["#E6EB5E", "#FF8A3D", "#E3CDBE", "#6FA8DC", "#8A8C45", "#F2A7C3", "#5CC8B0", "#B388FF", "#B8794F"];
+const SEED_PALETTE = ["#E6EB5E", "#FF8A3D", "#E3CDBE", "#6FA8DC", "#8A8C45", "#F2A7C3", "#5CC8B0", "#B79CF5", "#B8794F"];
 
 function seedEnabled(): boolean {
   return process.env.FATHERDLE_SEED !== "none";
@@ -884,7 +884,7 @@ const PALETTE = [
   "#8A8C45",
   "#F2A7C3",
   "#5CC8B0",
-  "#B388FF",
+  "#B79CF5",
   "#B8794F",
 ];
 

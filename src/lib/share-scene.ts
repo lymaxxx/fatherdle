@@ -7,7 +7,7 @@ import type { LeagueWeek } from "./analytics/feed";
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
-export const DM = '"DM Sans", system-ui, sans-serif';
+export const DM = '"Spline Sans", system-ui, sans-serif';
 export const SERIF = '"Instrument Serif", Georgia, serif';
 
 export type Op =
