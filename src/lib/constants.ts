@@ -320,3 +320,15 @@ export const ACTIVE_GAME_SLUGS: GameSlug[] = [
   "flagments",
   "whenography",
 ];
+
+/** Safe lookup: an unknown slug (e.g. a game added after this page loaded) never crashes the UI. */
+export function gameOf(slug: string): GameConfig {
+  return (
+    (GAMES as Record<string, GameConfig>)[slug] ?? {
+      ...GAMES.custom,
+      slug: slug as GameSlug,
+      name: slug ? slug[0].toUpperCase() + slug.slice(1) : "Game",
+      shortName: slug,
+    }
+  );
+}

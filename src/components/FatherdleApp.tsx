@@ -40,7 +40,7 @@ import {
   GameVisualisationData,
   LeaderboardColumn,
 } from "@/lib/analytics/game-modules";
-import { APP_WORDMARK, GAMES } from "@/lib/constants";
+import { APP_WORDMARK, GAMES, gameOf } from "@/lib/constants";
 import { AdminPanel } from "@/components/AdminPanel";
 import { MondayBanner, PreviousLeagues } from "@/components/LeaguesAndFeed";
 import type { FeedDay, FeedItem, LeagueWeek, LeaguesPayload } from "@/lib/analytics/feed";
@@ -535,22 +535,22 @@ export function FatherdleApp({
   );
 
   return (
-    <div className="min-h-screen bg-bg text-text pb-[110px] md:pb-16">
+    <div className="min-h-screen bg-bg text-text pb-[110px] lg:pb-16">
       {/* TOP BAR: desktop = wordmark, five tabs, Join + Paste; phone = wordmark + Paste */}
-      <header className="sticky top-0 z-30 bg-bg md:border-b md:border-line/60">
-        <div className="max-w-[1440px] mx-auto px-5 md:px-12 h-[64px] md:h-[80px] flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-30 bg-bg lg:border-b lg:border-line/60">
+        <div className="max-w-[1440px] mx-auto px-5 lg:px-12 h-[64px] lg:h-[80px] flex items-center justify-between gap-4">
           <button
             type="button"
             onClick={() => setActiveTab("today")}
             className="flex items-center gap-2.5 text-left group min-w-0"
           >
-            <span className="w-3.5 h-3.5 md:w-4 md:h-4 rounded-full bg-lime group-hover:scale-110 transition-transform shrink-0" />
-            <span className="text-[12px] md:text-[14px] font-bold tracking-[0.14em] text-lime md:text-text truncate">
+            <span className="w-3.5 h-3.5 lg:w-4 lg:h-4 rounded-full bg-lime group-hover:scale-110 transition-transform shrink-0" />
+            <span className="text-[12px] lg:text-[14px] font-bold tracking-[0.14em] text-lime lg:text-text truncate lg:hidden xl:inline">
               {APP_WORDMARK}
             </span>
           </button>
 
-          <nav className="hidden md:flex items-center gap-9">
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-9">
             {(
               [
                 { id: "today", label: "League" },
@@ -577,12 +577,12 @@ export function FatherdleApp({
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 md:gap-3 shrink-0">
+          <div className="flex items-center gap-2 lg:gap-3 shrink-0">
             {showAdminLink && (
               <button
                 type="button"
                 onClick={() => setActiveTab("admin")}
-                className={`hidden md:inline-flex px-3.5 py-2 rounded-full text-[13px] font-semibold ${
+                className={`hidden lg:inline-flex px-3.5 py-2 rounded-full text-[13px] font-semibold ${
                   activeTab === "admin" ? "text-lime" : "text-muted hover:text-text"
                 }`}
               >
@@ -590,14 +590,14 @@ export function FatherdleApp({
               </button>
             )}
             {hasJoined ? (
-              <label className="relative btn-secondary flex items-center gap-2 rounded-full md:border-[1.5px] md:border-line md:pl-1.5 md:pr-4 md:h-12 cursor-pointer">
+              <label className="relative btn-secondary flex items-center gap-2 rounded-full lg:border-[1.5px] lg:border-line lg:pl-1.5 lg:pr-4 lg:h-12 cursor-pointer">
                 <span
                   style={{ backgroundColor: currentUserPlayer?.color || "#FF8A3D" }}
                   className="w-9 h-9 rounded-full text-[#121212] text-[14px] font-bold flex items-center justify-center"
                 >
                   {currentUserPlayer?.avatarInitials}
                 </span>
-                <span className="hidden md:inline text-[14px] font-semibold">{currentUserPlayer?.name}</span>
+                <span className="hidden lg:inline text-[14px] font-semibold">{currentUserPlayer?.name}</span>
                 <select
                   aria-label="Who are you?"
                   value={currentUserId}
@@ -627,7 +627,7 @@ export function FatherdleApp({
               <button
                 type="button"
                 onClick={() => openJoin("both")}
-                className="btn-secondary hidden md:flex items-center gap-2 px-5 h-12 rounded-full border-[1.5px] border-line text-[15px] font-semibold text-text whitespace-nowrap"
+                className="btn-secondary hidden lg:flex items-center gap-2 px-5 h-12 rounded-full border-[1.5px] border-line text-[15px] font-semibold text-text whitespace-nowrap"
               >
                 <UserPlus className="w-4 h-4" />
                 <span>Join the league</span>
@@ -637,10 +637,10 @@ export function FatherdleApp({
             <button
               type="button"
               onClick={() => (hasJoined ? setIsPasteOpen(true) : openJoin("both"))}
-              className="btn-primary wobble-twice flex items-center gap-2 px-4 md:px-7 h-10 md:h-12 rounded-full bg-lime text-[#121212] text-[13px] md:text-[16px] font-bold whitespace-nowrap"
+              className="btn-primary wobble-twice flex items-center gap-2 px-4 lg:px-7 h-10 lg:h-12 rounded-full bg-lime text-[#121212] text-[13px] lg:text-[16px] font-bold whitespace-nowrap"
             >
-              <ClipboardPaste className="w-4 h-4 md:w-5 md:h-5" />
-              <span>{hasJoined ? "Paste result" : <><span className="md:hidden">Join</span><span className="hidden md:inline">Paste result</span></>}</span>
+              <ClipboardPaste className="w-4 h-4 lg:w-5 lg:h-5" />
+              <span>{hasJoined ? "Paste result" : <><span className="lg:hidden">Join</span><span className="hidden lg:inline">Paste result</span></>}</span>
             </button>
           </div>
         </div>
@@ -1042,7 +1042,7 @@ export function FatherdleApp({
                           <span className="block text-[17px] md:text-[22px] font-bold tracking-[-0.3px] leading-tight truncate">
                             {row.player.name}
                           </span>
-                          <span className={`hidden md:block text-[13px] ${played ? "opacity-70" : ""}`}>
+                          <span className={`hidden md:block text-[13px] truncate ${played ? "opacity-70" : ""}`}>
                             {sub}
                             {isMe && played ? " · you" : ""}
                           </span>
@@ -1071,7 +1071,7 @@ export function FatherdleApp({
           );
 
           const gameTile = (dg: (typeof data.today.games)[number]) => {
-            const g = GAMES[dg.gameSlug];
+            const g = gameOf(dg.gameSlug);
             const done = data.players.filter((p) => dg.rankings.some((r) => r.playerId === p.id));
             const isCounted = dg.status === "Qualified";
             return (
@@ -1130,7 +1130,7 @@ export function FatherdleApp({
                   <div key={dg.gameSlug} className="md:hidden rounded-[14px] p-3 outline outline-1 outline-line -outline-offset-1 opacity-50 space-y-2">
                     <div className="flex items-center gap-2">
                       <GameIcon slug={dg.gameSlug} size={26} />
-                      <span className="text-[13px] font-semibold flex-1 min-w-0 truncate">{GAMES[dg.gameSlug].name}</span>
+                      <span className="text-[13px] font-semibold flex-1 min-w-0 truncate">{gameOf(dg.gameSlug).name}</span>
                       <span className="text-[12px] font-bold text-muted">0/{dg.totalPlayers}</span>
                     </div>
                     <div className="text-[11px] text-muted">No one yet</div>
@@ -1148,7 +1148,7 @@ export function FatherdleApp({
                       className="inline-flex items-center gap-1.5 text-[12px] font-semibold hover:text-lime"
                     >
                       <GameIcon slug={dg.gameSlug} size={18} />
-                      {GAMES[dg.gameSlug].name}
+                      {gameOf(dg.gameSlug).name}
                       <span className="text-muted">0/{dg.totalPlayers}</span>
                     </button>
                   ))}
@@ -1214,9 +1214,9 @@ export function FatherdleApp({
           return (
             <div className="space-y-5 md:space-y-6">
               {todayView === "today" && banner}
-              <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_484px] lg:gap-12 lg:items-start space-y-6 lg:space-y-0">
+              <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,484px)] lg:gap-8 xl:gap-12 lg:items-start space-y-6 lg:space-y-0">
                 <div className={`space-y-5 md:space-y-6 min-w-0 ${todayView !== "today" ? "lg:col-span-2" : ""}`}>
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="flex flex-col md:flex-row md:flex-wrap md:items-center md:justify-between gap-4">
                     <h1 className="text-[44px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">League</h1>
                     <div className="flex items-center gap-2">
                       {tabs}
@@ -1744,7 +1744,7 @@ export function FatherdleApp({
       </main>
 
       {/* PHONE DOCK: five equal tabs, icon over label, selected tab filled lime */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#1A1A19] border-t border-line/50 px-3 pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))] grid grid-cols-5 gap-1.5">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#1A1A19] border-t border-line/50 px-3 md:px-[max(12px,calc(50vw-270px))] pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))] grid grid-cols-5 gap-1.5">
         {[
           { id: "today" as NavTab, label: "League", icon: Trophy },
           { id: "feed" as NavTab, label: "Feed", icon: List },

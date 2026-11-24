@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ChevronRight, ClipboardPaste, MoreHorizontal, Share2, Trash2, X } from "lucide-react";
-import { GAMES } from "@/lib/constants";
+import { GAMES, gameOf } from "@/lib/constants";
 import { GameIcon, Confetti } from "./ui";
 import type { FeedItem, FeedResultItem, LeagueWeek } from "@/lib/analytics/feed";
 import type { GameSlug, Player, PlayerStandingRow } from "@/lib/types";
@@ -561,7 +561,7 @@ function ResultMenu({ item, actions }: { item: FeedResultItem; actions: FeedActi
                       type="button"
                       onClick={() => {
                         setOpen(false);
-                        if (window.confirm(`Move this ${GAMES[item.gameSlug].name} result to ${p.name}?`))
+                        if (window.confirm(`Move this ${gameOf(item.gameSlug).name} result to ${p.name}?`))
                           actions.onReassign(item.id, p.id);
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-surface text-left text-[14px] font-bold"
@@ -578,7 +578,7 @@ function ResultMenu({ item, actions }: { item: FeedResultItem; actions: FeedActi
               type="button"
               onClick={() => {
                 setOpen(false);
-                if (window.confirm(`Delete this ${GAMES[item.gameSlug].name} result for ${item.playerName}?`))
+                if (window.confirm(`Delete this ${gameOf(item.gameSlug).name} result for ${item.playerName}?`))
                   actions.onDelete(item.id);
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-surface text-left text-[14px] font-bold text-orange"
@@ -608,7 +608,7 @@ function ResultCard({
   links: FeedLinks;
   reveal: boolean;
 }) {
-  const game = GAMES[item.gameSlug];
+  const game = gameOf(item.gameSlug);
   const stacked = STACKED_GAMES.includes(item.gameSlug);
   const place =
     item.placement && item.outOf

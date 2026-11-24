@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ClipboardPaste, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { parseMultiGamePaste } from "@/lib/parsers";
-import { GAMES } from "@/lib/constants";
+import { GAMES, gameOf } from "@/lib/constants";
 import { Player } from "@/lib/types";
 
 export function PasteResultModal({
@@ -218,7 +218,7 @@ export function PasteResultModal({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {preview.parsed.map((item, idx) => {
-                  const g = GAMES[item.gameSlug];
+                  const g = gameOf(item.gameSlug);
                   return (
                     <div
                       key={`${item.gameSlug}_${idx}`}

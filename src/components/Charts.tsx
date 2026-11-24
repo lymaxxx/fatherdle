@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import { GameSlug, Player, PlayerStandingRow } from "@/lib/types";
 import { DailyPointsSeriesPoint, ActivityCalendarDay } from "@/lib/analytics/engine";
-import { GAMES, TOKENS } from "@/lib/constants";
+import { GAMES, TOKENS, gameOf } from "@/lib/constants";
 
 /**
  * 2.4 Points Over Time (Multi-series SVG Line Chart)
@@ -423,7 +423,7 @@ export function PointsBreakdownChart({
                   const pts = row.pointsByGame[slug] || 0;
                   if (pts <= 0) return null;
                   const widthPct = (pts / maxTotal) * 100;
-                  const game = GAMES[slug];
+                  const game = gameOf(slug);
                   return (
                     <div
                       key={slug}
@@ -452,7 +452,7 @@ export function PointsBreakdownChart({
               0
             );
             if (totalForGame <= 0) return null;
-            const g = GAMES[slug];
+            const g = gameOf(slug);
             return (
               <div key={slug} className="flex items-center gap-1.5 text-[11px] text-muted">
                 <span
@@ -477,7 +477,7 @@ export function PointsBreakdownChart({
       }));
       const total = segments.reduce((acc, s) => acc + s.points, 0);
       return {
-        game: GAMES[slug],
+        game: gameOf(slug),
         total,
         segments,
       };

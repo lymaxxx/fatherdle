@@ -4,7 +4,7 @@ import React from "react";
 import { Share2 } from "lucide-react";
 import { DatePeriod, GameSlug, PlayerStandingRow } from "@/lib/types";
 import { DailyPointsSeriesPoint } from "@/lib/analytics/engine";
-import { GAMES } from "@/lib/constants";
+import { GAMES, gameOf } from "@/lib/constants";
 
 function formatOrdinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
@@ -57,7 +57,7 @@ export function HighlightBlocks({
     .slice(0, 5);
 
   const bestGameSlug = gamePointsEntries[0]?.[0] || "maptap";
-  const bestGame = GAMES[bestGameSlug];
+  const bestGame = gameOf(bestGameSlug);
   const maxGamePts = Math.max(1, ...(gamePointsEntries.map((e) => e[1]) || [1]));
 
   // Points per day (last 7 days of the selected series)
@@ -172,7 +172,7 @@ export function HighlightBlocks({
 
         <div className="flex flex-col gap-1.5 mt-4">
           {gamePointsEntries.map(([slug, pts]) => {
-            const g = GAMES[slug];
+            const g = gameOf(slug);
             const wPct = Math.max(28, (pts / maxGamePts) * 100);
             return (
               <div

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ClipboardPaste, Hourglass, MoreHorizontal, Trash2, Zap } from "lucide-react";
-import { GAMES } from "@/lib/constants";
+import { GAMES, gameOf } from "@/lib/constants";
 import type { FeedDay, FeedItem, FeedResultItem } from "@/lib/analytics/feed";
 import type { GameSlug, Player, PlayerStandingRow } from "@/lib/types";
 import { GAME_ICON } from "@/lib/game-icons";
@@ -109,7 +109,7 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
 
   if (slug === "maptap" && item.rounds) {
     return (
-      <div className="w-[170px] md:w-[340px]">
+      <div className="w-full min-w-0 max-w-[340px]">
         <ColumnChart
           height={96}
           gap={6}
@@ -323,7 +323,7 @@ function caption(item: FeedResultItem): string {
   if (item.gameSlug === "maptap" && item.rounds?.length) return `Best round ${Math.max(...item.rounds)}`;
   if (item.placement === 1) return item.outOf > 1 ? "Best today" : "First in";
   if (item.dayBestBy && item.dayBest !== null) {
-    const g = GAMES[item.gameSlug];
+    const g = gameOf(item.gameSlug);
     if (g?.unit === "attempts") return `${item.dayBestBy} got it in ${item.dayBest}`;
     return `${item.dayBestBy} leads · ${item.dayBest.toLocaleString("en-GB")}`;
   }
@@ -373,7 +373,7 @@ function ResultMenu({ item, actions }: { item: FeedResultItem; actions: FeedActi
                       type="button"
                       onClick={() => {
                         setOpen(false);
-                        if (window.confirm(`Move this ${GAMES[item.gameSlug].name} result to ${p.name}?`))
+                        if (window.confirm(`Move this ${gameOf(item.gameSlug).name} result to ${p.name}?`))
                           actions.onReassign(item.id, p.id);
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-surface text-left text-[14px] font-semibold"
@@ -390,7 +390,7 @@ function ResultMenu({ item, actions }: { item: FeedResultItem; actions: FeedActi
               type="button"
               onClick={() => {
                 setOpen(false);
-                if (window.confirm(`Delete this ${GAMES[item.gameSlug].name} result for ${item.playerName}?`))
+                if (window.confirm(`Delete this ${gameOf(item.gameSlug).name} result for ${item.playerName}?`))
                   actions.onDelete(item.id);
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-surface text-left text-[14px] font-semibold text-orange"
@@ -422,7 +422,7 @@ function ResultCard({
   links: FeedLinks;
   reveal: boolean;
 }) {
-  const game = GAMES[item.gameSlug];
+  const game = gameOf(item.gameSlug);
   const wide = WIDE_GRAPHIC.includes(item.gameSlug);
   const cap = caption(item);
   const time = item.date === today ? relativeShort(item.at, now) : clock(item.at);
@@ -449,11 +449,11 @@ function ResultCard({
       </div>
 
       <div className={`flex gap-4 ${wide ? "flex-col" : "items-center justify-between"}`}>
-        <div className={`min-w-0 ${wide ? "" : "flex-1"}`}>
+        <div className={`min-w-0 ${wide ? "" : "flex-1 overflow-hidden"}`}>
           <Graphic item={item} reveal={reveal} />
         </div>
-        <div className={`text-right shrink-0 ${wide ? "self-end" : ""}`}>
-          <div className="font-serif text-[44px] md:text-[56px] leading-[0.95] tracking-[-1px] whitespace-nowrap">
+        <div className={`text-right shrink-0 max-w-[45%] ${wide ? "self-end" : ""}`}>
+          <div className="font-serif text-[40px] md:text-[48px] xl:text-[56px] leading-[0.95] tracking-[-1px] whitespace-nowrap">
             {item.displayResult}
           </div>
           {cap && (
@@ -646,7 +646,7 @@ export function FeedPage({
       </div>
 
       {/* Phone: day strip, every day with results */}
-      <div className="md:hidden flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 pb-1">
+      <div className="lg:hidden flex gap-2 overflow-x-auto no-scrollbar -mx-5 md:mx-0 px-5 md:px-0 pb-1">
         {days.map((d) => {
           const { num, wd } = parts(d.date);
           const sel = selectedDay ? selectedDay === d.date : d.date === todayDate;
@@ -706,7 +706,7 @@ export function FeedPage({
         )}
       </div>
 
-      <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,360px)] lg:grid-cols-[288px_minmax(0,1fr)_400px] md:gap-6 space-y-5 md:space-y-0">
+      <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(260px,340px)] lg:grid-cols-[minmax(190px,260px)_minmax(0,1fr)_minmax(260px,360px)] xl:grid-cols-[288px_minmax(0,1fr)_400px] md:gap-4 lg:gap-6 space-y-5 md:space-y-0">
         {/* Desktop: date rail with every day */}
         <aside className="hidden lg:block self-start sticky top-[100px] max-h-[calc(100vh-120px)] overflow-y-auto no-scrollbar pr-1">
           <button

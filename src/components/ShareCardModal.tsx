@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Download, Share2, X } from "lucide-react";
 import { DailyGameStanding, DatePeriod, GameSlug, PlayerStandingRow } from "@/lib/types";
-import { APP_WORDMARK, GAMES } from "@/lib/constants";
+import { APP_WORDMARK, GAMES, gameOf } from "@/lib/constants";
 
 import {
   CARD_H,
@@ -93,7 +93,7 @@ export function ShareCardModal({
     .filter(([slug, pts]) => slug !== "custom" && pts > 0)
     .sort((a, b) => b[1] - a[1]);
   const bestGameName = gamePointsEntries[0]
-    ? GAMES[gamePointsEntries[0][0]].name
+    ? gameOf(gamePointsEntries[0][0]).name
     : "MapTap";
 
   const maxPts = Math.max(1, ...allStandings.map((r) => r.totalPoints));
@@ -106,7 +106,7 @@ export function ShareCardModal({
       const top = g.rankings[0];
       return {
         key: g.gameSlug,
-        game: GAMES[g.gameSlug],
+        game: gameOf(g.gameSlug),
         placement: mine.placement,
         outOf: g.submissionCount,
         result: mine.displayResult,
@@ -127,7 +127,7 @@ export function ShareCardModal({
   const sceneOps: Op[] =
     mode === "game" && gameStanding
       ? gameCardOps({
-          name: GAMES[gameStanding.gameSlug].name,
+          name: gameOf(gameStanding.gameSlug).name,
           slug: gameStanding.gameSlug,
           rangeLabel: dayLabel,
           kpis: [
@@ -161,7 +161,7 @@ export function ShareCardModal({
             firstPlaces: r.firstPlaces,
           })),
           games: (dayGames ?? []).map((g) => ({
-            name: GAMES[g.gameSlug].name,
+            name: gameOf(g.gameSlug).name,
             slug: g.gameSlug,
             submitted: g.submissionCount,
             of: g.totalPlayers,
@@ -198,8 +198,8 @@ export function ShareCardModal({
           averagePlacement: playerRow.averagePlacement,
           periodLabel: period.label,
           games: gamePointsEntries.map(([slug, pts]) => ({
-            name: GAMES[slug].name,
-            color: GAMES[slug].color,
+            name: gameOf(slug).name,
+            color: gameOf(slug).color,
             slug,
             points: pts,
           })),
