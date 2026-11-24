@@ -1,4 +1,5 @@
 import type { LeagueWeek } from "./analytics/feed";
+import { GAME_ICON } from "./game-icons";
 
 /**
  * League share cards (1080x1350) described once as a list of shapes and text, so the on-screen
@@ -19,6 +20,10 @@ export type Op =
       h: number;
       fill: string;
       r?: number | [number, number, number, number];
+      grad?: [string, string]; // left-to-right gradient, overrides fill
+      fade?: string; // vertical fade from this colour at the top to fill at the bottom
+      rot?: number; // degrees, about `pivot`
+      pivot?: [number, number];
     }
   | { t: "circle"; x: number; y: number; d: number; fill: string }
   | {
@@ -34,6 +39,8 @@ export type Op =
       ls?: number;
       align?: "left" | "right";
       w?: number; // box width for right-aligned text
+      rot?: number;
+      pivot?: [number, number];
     }
   | { t: "icon"; x: number; y: number; size: number; color: string; paths: string[] };
 
@@ -58,12 +65,63 @@ function nameSize(name: string, max: number, maxWidth = 860): number {
   return Math.min(max, Math.floor(maxWidth / Math.max(1, name.length * 0.58)));
 }
 
-function header(right: string): Op[] {
+// Shared card system (HANDOVER §6): accent fade from the top edge, wordmark, tilted date chip,
+// title, four KPI tiles, labelled sections, three footer pills.
+const SURFACE = "#1C1C1B";
+const ACCENTS = {
+  orange: ["#FF8A3D", "#2B1A10"],
+  violet: ["#B79CF5", "#1E1A2B"],
+  blue: ["#6FA8DC", "#141D27"],
+  yellow: ["#FFD93D", "#2A2610"],
+  pink: ["#F2A7C3", "#2A1A22"],
+} as const;
+export type Accent = keyof typeof ACCENTS;
+
+function textWidth(text: string, size: number, ls = 0): number {
+  return Math.ceil(text.length * size * 0.6 + text.length * ls);
+}
+
+function frame(accent: Accent, dateText: string, title: string, sub: string, titleMax = 108): Op[] {
+  const [col, tint] = ACCENTS[accent];
+  const chipW = textWidth(dateText, 26, 1) + 56;
+  const size = nameSize(title, titleMax, 968);
   return [
-    { t: "circle", x: 56, y: 62, d: 22, fill: LIME },
-    { t: "text", x: 92, top: 62, lh: 28, text: "FATHERDLE", size: 22, weight: 800, color: TEXT, ls: 3 },
-    { t: "text", x: 624, top: 62, lh: 28, text: right, size: 22, weight: 700, color: TEXT, ls: 3, align: "right", w: 400 },
+    { t: "rect", x: 0, y: 0, w: CARD_W, h: CARD_H, fill: INK, fade: tint },
+    { t: "circle", x: 56, y: 56, d: 22, fill: col },
+    { t: "text", x: 92, top: 56, lh: 28, text: "FATHERDLE", size: 22, weight: 800, color: col, ls: 3 },
+    { t: "rect", x: 56, y: 112, w: chipW, h: 56, fill: col, r: 28, rot: -2, pivot: [56 + chipW / 2, 140] },
+    { t: "text", x: 56 + 28, top: 126, lh: 28, text: dateText, size: 26, weight: 700, color: INK, ls: 1, rot: -2, pivot: [56 + chipW / 2, 140] },
+    { t: "text", x: 56, top: 196, lh: size, text: title, size, weight: 700, color: TEXT, ls: -Math.round(size / 40) },
+    { t: "text", x: 56, top: 196 + size + 6, lh: 40, text: sub, size: 30, weight: 500, color: MUTED },
   ];
+}
+
+function kpis(top: number, items: Array<[string, string]>): Op[] {
+  const w = 230;
+  const ops: Op[] = [];
+  items.slice(0, 4).forEach(([value, label], i) => {
+    const x = 56 + i * (w + 16);
+    ops.push({ t: "rect", x, y: top, w, h: 150, fill: SURFACE, r: 18 });
+    ops.push({ t: "text", x: x + 22, top: top + 20, lh: 70, text: value, size: 68, weight: 400, color: TEXT, serif: true, ls: -1 });
+    ops.push({ t: "text", x: x + 24, top: top + 102, lh: 24, text: label, size: 19, weight: 600, color: MUTED });
+  });
+  return ops;
+}
+
+function label(top: number, text: string): Op {
+  return { t: "text", x: 56, top, lh: 22, text: text.toUpperCase(), size: 18, weight: 700, color: MUTED, ls: 3 };
+}
+
+function pills(items: string[]): Op[] {
+  const ops: Op[] = [];
+  let x = 56;
+  for (const it of items.slice(0, 3)) {
+    const w = textWidth(it, 20, 0) + 44;
+    ops.push({ t: "rect", x, y: 1250, w, h: 48, fill: SURFACE, r: 24 });
+    ops.push({ t: "text", x: x + 22, top: 1262, lh: 24, text: it, size: 20, weight: 600, color: TEXT });
+    x += w + 12;
+  }
+  return ops;
 }
 
 function bars(
@@ -138,61 +196,26 @@ export function leagueCurrentOps(week: LeagueWeek): Op[] {
   const second = rows[1];
   const hasPoints = !!leader && leader.points > 0;
   const gap = hasPoints && second ? leader.points - second.points : 0;
-  const name = hasPoints ? leader.name : "No points yet";
-  const size = nameSize(name, 230);
+  const title = hasPoints ? `${leader.name} leads` : "No points yet";
   const sub = !hasPoints
     ? "Results will appear as games qualify"
     : second && gap === 0
-    ? `is level with ${second.name} on ${leader.points}`
+    ? `level with ${second.name} on ${leader.points}`
     : second
-    ? `leads the league by ${gap} ${plural(gap, "point")}`
-    : "leads the league";
-
-  const ops: Op[] = [
-    { t: "rect", x: 0, y: 0, w: CARD_W, h: CARD_H, fill: INK },
-    ...header("THIS WEEK"),
-    { t: "rect", x: 56, y: 120, w: 968, h: 420, fill: LIME, r: 48 },
-    {
-      t: "text",
-      x: 104,
-      top: 168,
-      lh: 28,
-      text: `LEAGUE STANDINGS · DAY ${week.daysElapsed} OF 7`,
-      size: 22,
-      weight: 700,
-      color: INK,
-      ls: 4,
-    },
-    {
-      t: "text",
-      x: 96,
-      top: 216 + (230 - size) / 2,
-      lh: size,
-      text: name,
-      size,
-      weight: 800,
-      color: INK,
-      ls: Math.round((-9 * size) / 230),
-    },
-    { t: "text", x: 104, top: 470, lh: 44, text: sub, size: 36, weight: 700, color: INK },
-    ...bars(rows, 576, 68, 424, 60, leader?.points ?? 1),
-    ...stats(1010, [
-      [`${week.daysPlayed} of 7`, "days played"],
+    ? `by ${gap} ${plural(gap, "point")} this week`
+    : "this week";
+  return [
+    ...frame("violet", week.label.toUpperCase(), title, sub),
+    ...kpis(380, [
+      [String(leader?.points ?? 0), "leader points"],
+      [`${week.daysPlayed}/7`, "days played"],
       [String(week.gamesCounted), "games counted"],
       [String(week.leadChanges), plural(week.leadChanges, "lead change")],
     ]),
-    {
-      t: "text",
-      x: 56,
-      top: 1278,
-      lh: 32,
-      text: "Standings so far. Final results come on Sunday night.",
-      size: 24,
-      weight: 500,
-      color: MUTED,
-    },
+    label(560, "Standings"),
+    ...bars(rows, 596, 76, 610, 64, leader?.points ?? 1),
+    ...pills([`Day ${week.daysElapsed} of 7`, "Final on Sunday night", "Fatherdle league"]),
   ];
-  return ops;
 }
 
 export function leagueFinalOps(week: LeagueWeek): Op[] {
@@ -200,62 +223,44 @@ export function leagueFinalOps(week: LeagueWeek): Op[] {
   const winner = rows[0];
   const podium = rows.slice(0, 3);
   const rest = rows.slice(3);
-  const name = winner?.name ?? "No winner";
-  const size = nameSize(name, 210, 700);
-
   const ops: Op[] = [
-    { t: "rect", x: 0, y: 0, w: CARD_W, h: CARD_H, fill: INK },
-    ...header(week.label.toUpperCase()),
-    { t: "rect", x: 56, y: 120, w: 968, h: 360, fill: TEXT, r: 48 },
-    { t: "text", x: 104, top: 168, lh: 28, text: "FINAL RESULTS · LEAGUE WINNER", size: 22, weight: 700, color: INK, ls: 4 },
-    {
-      t: "text",
-      x: 96,
-      top: 212 + (210 - size) / 2,
-      lh: size,
-      text: name,
-      size,
-      weight: 800,
-      color: INK,
-      ls: Math.round((-8 * size) / 210),
-    },
-    {
-      t: "text",
-      x: 104,
-      top: 430,
-      lh: 42,
-      text: winner ? `won with ${winner.points} ${plural(winner.points, "point")}` : "No results this week",
-      size: 34,
-      weight: 700,
-      color: INK,
-    },
-    { t: "icon", x: 856, y: 170, size: 136, color: INK, paths: TROPHY },
-  ];
-
-  // Podium: 2nd | 1st | 3rd, bottoms aligned at y=920
-  const slots: Array<{ idx: number; x: number; h: number; label: string }> = [
-    { idx: 1, x: 56, h: 260, label: "2nd" },
-    { idx: 0, x: 390, h: 330, label: "1st" },
-    { idx: 2, x: 724, h: 200, label: "3rd" },
-  ];
-  for (const s of slots) {
-    const p = podium[s.idx];
-    if (!p) continue;
-    const top = 920 - s.h;
-    ops.push({ t: "rect", x: s.x, y: top, w: 300, h: s.h, fill: p.color, r: [28, 28, 0, 0] });
-    ops.push({ t: "text", x: s.x + 24, top: top + 22, lh: 44, text: p.name, size: 36, weight: 800, color: INK });
-    ops.push({ t: "text", x: s.x + 24, top: top + 58, lh: 92, text: String(p.points), size: 92, weight: 400, color: INK, serif: true });
-    ops.push({ t: "text", x: s.x + 24, top: 876, lh: 34, text: s.label, size: 26, weight: 800, color: INK });
-  }
-
-  ops.push(...bars(rest.slice(0, 3), 950, 64, 216, 54, winner?.points ?? 1));
-  ops.push(
-    ...stats(1170, [
+    ...frame(
+      "violet",
+      week.label.toUpperCase(),
+      winner ? `${winner.name} won` : "No winner",
+      winner ? `the league with ${winner.points} ${plural(winner.points, "point")}` : "No results this week"
+    ),
+    { t: "icon", x: 880, y: 196, size: 140, color: ACCENTS.violet[0], paths: TROPHY },
+    ...kpis(380, [
+      [String(winner?.points ?? 0), "winning points"],
       [String(week.standings.length), "players"],
       [String(week.gamesCounted), "games counted"],
       [String(week.leadChanges), plural(week.leadChanges, "lead change")],
-    ])
-  );
+    ]),
+    label(560, "Podium"),
+  ];
+  // Staggered podium: best widest and tallest, bottom-aligned at y=900
+  const slots = [
+    { idx: 0, w: 380, h: 270, label: "1st" },
+    { idx: 1, w: 300, h: 220, label: "2nd" },
+    { idx: 2, w: 252, h: 170, label: "3rd" },
+  ];
+  let x = 56;
+  for (const s of slots) {
+    const pl = podium[s.idx];
+    if (!pl) continue;
+    const top = 900 - s.h;
+    ops.push({ t: "rect", x, y: top, w: s.w, h: s.h, fill: pl.color, r: 24 });
+    ops.push({ t: "text", x: x + 24, top: top + 20, lh: 28, text: s.label, size: 22, weight: 800, color: INK });
+    ops.push({ t: "text", x: x + 24, top: top + s.h - 120, lh: 40, text: pl.name, size: 34, weight: 700, color: INK });
+    ops.push({ t: "text", x: x + 24, top: top + s.h - 84, lh: 76, text: String(pl.points), size: 76, weight: 400, color: INK, serif: true });
+    x += s.w + 12;
+  }
+  if (rest.length) {
+    ops.push(label(930, "Rest of the table"));
+    ops.push(...bars(rest.slice(0, 3), 966, 66, 250, 54, winner?.points ?? 1));
+  }
+  ops.push(...pills([week.label, "Final results", "Fatherdle league"]));
   return ops;
 }
 
@@ -268,7 +273,7 @@ export interface PlayerStatsInput {
   firstPlaces: number;
   averagePlacement: number | null;
   periodLabel: string;
-  games: Array<{ name: string; color: string; points: number }>;
+  games: Array<{ name: string; color: string; points: number; slug?: string }>;
 }
 
 const ordinalOf = (n: number) => {
@@ -277,81 +282,48 @@ const ordinalOf = (n: number) => {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
 
-/** A player's statistics for a period: position, points, and points earned in each game. */
+/** A player's statistics for a period: KPIs plus game tiles sized by result. */
 export function playerStatsOps(p: PlayerStatsInput): Op[] {
-  const size = Math.min(176, Math.floor(880 / Math.max(1, p.name.length * 0.6)));
   const ops: Op[] = [
-    { t: "rect", x: 0, y: 0, w: CARD_W, h: CARD_H, fill: INK },
-    ...header(p.periodLabel.toUpperCase()),
-    { t: "rect", x: 56, y: 110, w: 968, h: 420, fill: LIME, r: 48 },
-    {
-      t: "text",
-      x: 96,
-      top: 110 + 52 + (176 - size) / 2,
-      lh: size,
-      text: p.name,
-      size,
-      weight: 800,
-      color: INK,
-      ls: Math.round((-7 * size) / 176),
-    },
+    ...frame("orange", p.periodLabel.toUpperCase(), p.name, `${ordinalOf(p.rank)} place · ${p.points} ${plural(p.points, "point")}`, 120),
+    ...kpis(380, [
+      [ordinalOf(p.rank), "league position"],
+      [String(p.points), "points"],
+      [String(p.firstPlaces), p.firstPlaces === 1 ? "first place" : "first places"],
+      [p.averagePlacement ? p.averagePlacement.toFixed(1) : "–", "average place"],
+    ]),
+    label(560, "Points by game"),
   ];
-  const metrics: Array<[string, string, number]> = [
-    [ordinalOf(p.rank), "League position", 100],
-    [String(p.points), "Points", 386],
-    [String(p.firstPlaces), p.firstPlaces === 1 ? "First place" : "First places", 676],
-  ];
-  for (const [v, label, x] of metrics) {
-    ops.push({ t: "text", x, top: 110 + 268, lh: 96, text: v, size: 96, weight: 400, color: INK, serif: true, ls: -3 });
-    ops.push({ t: "text", x: x + 4, top: 110 + 366, lh: 28, text: label, size: 20, weight: 600, color: INK });
-  }
-
-  const rows = p.games.slice(0, 9);
-  const pitch = Math.min(76, Math.floor(690 / Math.max(1, rows.length)));
-  const rowH = pitch - 8;
-  const max = Math.max(1, ...rows.map((g) => g.points));
-  rows.forEach((g, i) => {
-    const y = 556 + i * pitch;
-    ops.push({ t: "rect", x: 56, y, w: 968, h: rowH, fill: g.color, r: 16 });
-    // a darker strip shows each game's share of the best game
-    ops.push({
-      t: "rect",
-      x: 56,
-      y: y + rowH - 6,
-      w: Math.max(24, Math.round((g.points / max) * 968)),
-      h: 6,
-      fill: "rgba(18,18,18,0.35)",
-      r: [0, 3, 0, 16],
-    });
-    ops.push({ t: "text", x: 80, top: y + (rowH - 34) / 2, lh: 34, text: g.name, size: 26, weight: 800, color: INK });
-    ops.push({
-      t: "text",
-      x: 1000 - 200,
-      top: y + (rowH - 50) / 2,
-      lh: 50,
-      text: `${g.points}`,
-      size: 50,
-      weight: 400,
-      color: INK,
-      serif: true,
-      align: "right",
-      w: 200,
-    });
+  const games = p.games.slice(0, 12);
+  // Top three: staggered podium row with game gradients, bottom-aligned at y=860
+  const tops = games.slice(0, 3);
+  const widths = [380, 300, 252];
+  const heights = [250, 205, 160];
+  let x = 56;
+  tops.forEach((g, i) => {
+    const top = 860 - heights[i];
+    const icon = g.slug ? GAME_ICON[g.slug] : undefined;
+    ops.push({ t: "rect", x, y: top, w: widths[i], h: heights[i], fill: g.color, grad: icon ? [icon.from, icon.to] : undefined, r: 24 });
+    ops.push({ t: "text", x: x + 22, top: top + 18, lh: 30, text: g.name.length > 14 ? g.name.slice(0, 13) + "…" : g.name, size: 24, weight: 700, color: icon?.fg ?? INK });
+    ops.push({ t: "text", x: x + 22, top: top + heights[i] - 90, lh: 76, text: String(g.points), size: 76, weight: 400, color: icon?.fg ?? INK, serif: true });
+    x += widths[i] + 12;
   });
-  if (rows.length === 0) {
-    ops.push({ t: "text", x: 56, top: 580, lh: 32, text: "No points yet this period.", size: 24, weight: 500, color: MUTED });
-  }
-  const avg = p.averagePlacement ? `average place ${p.averagePlacement.toFixed(1)} · ` : "";
-  ops.push({
-    t: "text",
-    x: 56,
-    top: 1266,
-    lh: 32,
-    text: `${avg}${p.qualifiedGames} games counted · points earned in each game`,
-    size: 22,
-    weight: 500,
-    color: MUTED,
+  // Everything else: plain dark tiles, two columns
+  const rest = games.slice(3);
+  rest.forEach((g, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const w = 312;
+    const tx = 56 + col * (w + 16);
+    const ty = 884 + row * 104;
+    ops.push({ t: "rect", x: tx, y: ty, w, h: 92, fill: SURFACE, r: 18 });
+    ops.push({ t: "text", x: tx + 20, top: ty + 14, lh: 26, text: g.name.length > 13 ? g.name.slice(0, 12) + "…" : g.name, size: 20, weight: 600, color: MUTED });
+    ops.push({ t: "text", x: tx + 20, top: ty + 38, lh: 48, text: String(g.points), size: 48, weight: 400, color: TEXT, serif: true });
   });
+  if (games.length === 0) {
+    ops.push({ t: "text", x: 56, top: 600, lh: 32, text: "No points yet this period.", size: 26, weight: 500, color: MUTED });
+  }
+  ops.push(...pills([`${p.qualifiedGames} games counted`, p.periodLabel, "Fatherdle league"]));
   return ops;
 }
 
@@ -369,8 +341,26 @@ function roundedRect(ctx: CanvasRenderingContext2D, op: Extract<Op, { t: "rect" 
 export function drawOps(ctx: CanvasRenderingContext2D, ops: Op[]) {
   ctx.textBaseline = "middle";
   for (const op of ops) {
+    const rot = (op.t === "rect" || op.t === "text") && op.rot ? op : null;
+    if (rot) {
+      ctx.save();
+      ctx.translate(rot.pivot![0], rot.pivot![1]);
+      ctx.rotate((rot.rot! * Math.PI) / 180);
+      ctx.translate(-rot.pivot![0], -rot.pivot![1]);
+    }
     if (op.t === "rect") {
-      ctx.fillStyle = op.fill;
+      if (op.grad) {
+        const g = ctx.createLinearGradient(op.x, 0, op.x + op.w, 0);
+        g.addColorStop(0, op.grad[0]);
+        g.addColorStop(1, op.grad[1]);
+        ctx.fillStyle = g;
+      } else if (op.fade) {
+        const g = ctx.createLinearGradient(0, op.y, 0, op.y + op.h);
+        g.addColorStop(0, op.fade);
+        g.addColorStop(0.55, op.fill);
+        g.addColorStop(1, op.fill);
+        ctx.fillStyle = g;
+      } else ctx.fillStyle = op.fill;
       roundedRect(ctx, op);
     } else if (op.t === "circle") {
       ctx.fillStyle = op.fill;
@@ -399,6 +389,7 @@ export function drawOps(ctx: CanvasRenderingContext2D, ops: Op[]) {
       for (const d of op.paths) ctx.stroke(new Path2D(d));
       ctx.restore();
     }
+    if (rot) ctx.restore();
   }
   ctx.textAlign = "left";
   ctx.letterSpacing = "0px";

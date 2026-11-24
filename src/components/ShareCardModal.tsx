@@ -130,6 +130,7 @@ export function ShareCardModal({
           games: gamePointsEntries.map(([slug, pts]) => ({
             name: GAMES[slug].name,
             color: GAMES[slug].color,
+            slug,
             points: pts,
           })),
         })
@@ -484,10 +485,18 @@ function SceneView({ ops }: { ops: Op[] }) {
       {ops.map((op, i) => {
         if (op.t === "rect") {
           const r = Array.isArray(op.r) ? op.r.map((n) => `${n}px`).join(" ") : op.r ? `${op.r}px` : 0;
+          const background = op.grad
+            ? `linear-gradient(90deg, ${op.grad[0]}, ${op.grad[1]})`
+            : op.fade
+            ? `linear-gradient(180deg, ${op.fade} 0%, ${op.fill} 55%, ${op.fill} 100%)`
+            : op.fill;
           return (
             <div
               key={i}
-              style={{ position: "absolute", left: op.x, top: op.y, width: op.w, height: op.h, background: op.fill, borderRadius: r }}
+              style={{
+                position: "absolute", left: op.x, top: op.y, width: op.w, height: op.h, background, borderRadius: r,
+                ...(op.rot ? { transform: `rotate(${op.rot}deg)`, transformOrigin: `${op.pivot![0] - op.x}px ${op.pivot![1] - op.y}px` } : {}),
+              }}
             />
           );
         }
@@ -535,6 +544,7 @@ function SceneView({ ops }: { ops: Op[] }) {
               letterSpacing: op.ls ?? 0,
               color: op.color,
               whiteSpace: "nowrap",
+              ...(op.rot ? { transform: `rotate(${op.rot}deg)`, transformOrigin: `${op.pivot![0] - op.x}px ${op.pivot![1] - op.top}px` } : {}),
             }}
           >
             {op.text}

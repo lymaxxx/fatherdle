@@ -3,6 +3,7 @@
 import React from "react";
 import { ChevronRight, ClipboardPaste, MoreHorizontal, Share2, Trash2, X } from "lucide-react";
 import { GAMES } from "@/lib/constants";
+import { GameIcon } from "./ui";
 import type { FeedItem, FeedResultItem, LeagueWeek } from "@/lib/analytics/feed";
 import type { GameSlug, Player, PlayerStandingRow } from "@/lib/types";
 
@@ -796,11 +797,11 @@ export function FeedView({
               key={g.slug}
               type="button"
               onClick={() => onFilter(g.slug)}
-              className={`px-3.5 py-2 rounded-full text-[13px] font-bold whitespace-nowrap inline-flex items-center gap-2 ${
+              className={`btn-secondary pl-1.5 pr-3.5 py-1.5 rounded-full text-[13px] font-semibold whitespace-nowrap inline-flex items-center gap-2 ${
                 filter === g.slug ? "bg-text text-[#121212]" : "border-[1.5px] border-line text-muted"
               }`}
             >
-              <span style={{ backgroundColor: g.color }} className="w-2 h-2 rounded-full" />
+              <GameIcon slug={g.slug} size={24} />
               {g.name === "Wordishingrilliontapdle" ? "Wordish" : g.name}
             </button>
           ))}

@@ -544,10 +544,10 @@ export function FatherdleApp({
               <button
                 type="button"
                 onClick={() => openJoin("both")}
-                className="btn-secondary flex items-center gap-1.5 px-5 py-2.5 rounded-full border border-line text-[13px] font-semibold text-text"
+                className="btn-secondary flex items-center gap-1.5 px-3.5 md:px-5 py-2 md:py-2.5 whitespace-nowrap rounded-full border border-line text-[13px] font-semibold text-text"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>Join the league</span>
+                <span><span className="md:hidden">Join</span><span className="hidden md:inline">Join the league</span></span>
               </button>
             )}
 
@@ -1081,7 +1081,7 @@ export function FatherdleApp({
                 ) : (
                   <>
                 {todayView === "today" && banner}
-                <div className="grid grid-cols-[minmax(0,1fr)_484px] gap-6 items-start">
+                <div className={weekView ? "space-y-6" : "grid grid-cols-[minmax(0,1fr)_484px] gap-6 items-start"}>
                 <div className="space-y-4 min-w-0">
                 <div className="space-y-2.5">
                   {standings.map((row, idx) => {
