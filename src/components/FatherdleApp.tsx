@@ -18,6 +18,7 @@ import {
   UserPlus,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 import {
   DailyGameStanding,
@@ -937,319 +938,297 @@ export function FatherdleApp({
             </>
           );
 
-          return (
-            <div>
-              {/* ============ MOBILE ============ */}
-              <div className="md:hidden space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
-                      League
-                    </h1>
-                    <p className="text-[14px] text-muted mt-1">{subtitle}</p>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    {todayView !== "leagues" && (
-                    <button
-                      type="button"
-                      aria-label={weekView ? "Share this week" : "Share my day"}
-                      onClick={shareHere}
-                      className="w-11 h-11 rounded-full bg-surface2 flex items-center justify-center"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </button>
-                    )}
-                    {me && (
+          const leader = standings[0];
+          const second = standings[1];
+          const leadGap = leader && second ? leader.totalPoints - second.totalPoints : 0;
+          const openGames = data.today.games.filter((g) => g.status !== "Qualified").length;
+          const leadItem = data.feed.items.find((it) => it.kind === "lead" && it.date === data.todayDate);
+          const leadClock = leadItem
+            ? new Date(leadItem.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })
+            : "";
+          const hasLeader = !!leader && leader.totalPoints > 0;
+          const leadText = !hasLeader
+            ? weekView
+              ? "No points yet this week. The first qualified game starts the table."
+              : `No points yet today. A game counts once ${required} of ${Math.max(active, 1)} active players post it.`
+            : weekView
+            ? `${leader.player.name} leads the week${second && leadGap > 0 ? ` by ${leadGap}` : ""} · day ${wk.daysElapsed} of 7 · ${wk.leadChanges} lead ${wk.leadChanges === 1 ? "change" : "changes"} so far`
+            : `${leader.player.name} ${leadItem ? `took the lead at ${leadClock}` : "leads"}${
+                second && leadGap > 0 ? ` · ${second.player.name} is ${leadGap} ${leadGap === 1 ? "pt" : "pts"} behind` : second && leadGap === 0 ? ` · level with ${second.player.name}` : ""
+              } · ${openGames} ${openGames === 1 ? "game" : "games"} still open`;
+          const counted = data.today.games.filter((g) => g.status === "Qualified").length;
+          const playedGames = data.today.games
+            .filter((g) => g.submissionCount > 0)
+            .sort((x, y) => Number(y.status === "Qualified") - Number(x.status === "Qualified") || y.submissionCount - x.submissionCount);
+          const quietGames = data.today.games.filter((g) => g.submissionCount === 0);
+          const isoWeek = (d: string) => {
+            const dt = new Date(`${d}T12:00:00Z`);
+            const day = (dt.getUTCDay() + 6) % 7;
+            dt.setUTCDate(dt.getUTCDate() - day + 3);
+            const firstThursday = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+            return 1 + Math.round(((dt.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+          };
+
+          const tabs = (
+            <div className="inline-flex bg-surface rounded-full p-1">
+              {(
+                [
+                  ["today", "Today"],
+                  ["week", "This week"],
+                  ["leagues", "Previous"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTodayView(id)}
+                  className={`px-4 md:px-5 py-2 rounded-full text-[13px] md:text-[14px] font-semibold whitespace-nowrap transition-colors duration-200 ${
+                    todayView === id ? "bg-text text-[#121212]" : "text-muted hover:text-text"
+                  }`}
+                >
+                  {label}
+                  {id === "leagues" && <span className="hidden md:inline"> leagues</span>}
+                </button>
+              ))}
+            </div>
+          );
+
+          const bars = (
+            <div className="space-y-2 md:space-y-2.5">
+              {standings.map((row, idx) => {
+                const isMe = row.player.id === currentUserId;
+                const played = row.gamesPlayed > 0;
+                const pct = played ? Math.max(34, (row.totalPoints / maxPts) * 100) : 26;
+                const sub = !played
+                  ? weekView
+                    ? "Nothing submitted yet"
+                    : "Not submitted yet"
+                  : weekView
+                  ? `${row.qualifiedGamesPlayed} counted · ${row.firstPlaces} ${row.firstPlaces === 1 ? "win" : "wins"}`
+                  : `${row.qualifiedGamesPlayed} of ${counted} counted · ${row.firstPlaces} ${row.firstPlaces === 1 ? "win" : "wins"}`;
+                return (
+                  <div key={row.player.id} className="bar-row flex items-center gap-3 md:gap-5 h-[50px] md:h-[66px]">
+                    <span className="font-serif text-[30px] md:text-[48px] leading-none w-5 md:w-9 text-muted shrink-0">
+                      {row.rank}
+                    </span>
+                    <div className="flex-1 relative h-full min-w-0">
                       <button
                         type="button"
-                        aria-label="My page"
-                        onClick={() => openPlayer(me.id)}
-                        style={{ backgroundColor: me.color }}
-                        className="w-11 h-11 rounded-full text-[#121212] text-[18px] font-extrabold"
+                        onClick={() => openPlayer(row.player.id)}
+                        style={{
+                          width: `${pct}%`,
+                          animationDelay: `${idx * 60}ms`,
+                          ...(played ? { backgroundColor: row.player.color } : {}),
+                        }}
+                        className={`bar-fill grow-in absolute left-0 top-0 h-full min-w-[96px] md:min-w-[160px] rounded-[12px] md:rounded-[14px] text-left px-3.5 md:px-5 flex items-center gap-3 ${
+                          played ? "text-[#121212]" : "text-muted bg-surface2 md:outline md:outline-1 md:outline-line"
+                        }`}
                       >
-                        {me.avatarInitials}
+                        <span className="min-w-0">
+                          <span className="block text-[17px] md:text-[22px] font-bold tracking-[-0.3px] leading-tight truncate">
+                            {row.player.name}
+                          </span>
+                          <span className={`hidden md:block text-[13px] ${played ? "opacity-70" : ""}`}>
+                            {sub}
+                            {isMe && played ? " · you" : ""}
+                          </span>
+                        </span>
+                        {isMe && (
+                          <span className="hidden md:inline-flex ml-auto shrink-0 rounded-full bg-[#121212] text-text px-2.5 py-0.5 text-[11px] font-bold tracking-[0.1em]">
+                            YOU
+                          </span>
+                        )}
                       </button>
-                    )}
-                  </div>
-                </div>
-
-                {toggle}
-                {todayView === "leagues" ? (
-                  leaguesView
-                ) : (
-                  <>
-                {todayView === "today" && banner}
-                <div className="space-y-2">
-                  {standings.map((row, idx) => {
-                    const isMe = row.player.id === currentUserId;
-                    const played = row.gamesPlayed > 0;
-                    const pct = played ? Math.max(42, (row.totalPoints / maxPts) * 100) : 42;
-                    return (
-                      <div key={row.player.id} className="flex items-center gap-2.5 h-[56px]">
-                        <span className={`font-serif text-[28px] w-5 leading-none ${row.rank === 1 && played ? "text-lime" : "text-muted"}`}>
-                          {row.rank}
-                        </span>
-                        <div className="flex-1 relative h-[56px]">
-                          <button
-                            type="button"
-                            onClick={() => openPlayer(row.player.id)}
-                            style={{
-                              width: `${pct}%`,
-                              animationDelay: `${idx * 60}ms`,
-                              ...(played ? { backgroundColor: row.player.color } : {}),
-                            }}
-                            className={`grow-in absolute left-0 top-0 h-[56px] rounded-[14px] text-left px-4 flex flex-col justify-center ${
-                              played ? "text-[#121212]" : "text-muted bg-surface"
-                            }`}
-                          >
-                            <div className="text-[16px] font-bold leading-tight truncate">
-                              {row.player.name}
-                              {isMe ? " (you)" : ""}
-                            </div>
-                            <div className={`text-[11px] ${played ? "opacity-70" : ""}`}>{submittedLabel(row)}</div>
-                          </button>
-                        </div>
-                        <span className="font-serif text-[34px] leading-none w-[52px] text-right tabular-nums shrink-0">
-                          {played ? <CountUp value={row.totalPoints} /> : <span className="text-muted">–</span>}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="bg-surface2 rounded-[14px] p-3 flex items-start gap-2.5">
-                  <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
-                  <div className="text-[12px] leading-4">
-                    <div className="font-bold text-text">How points work</div>
-                    <p className="text-muted mt-0.5">
-                      Points come from your place in each qualified game. Players with the same
-                      result share a place.
-                    </p>
-                  </div>
-                </div>
-
-                {weekView ? weekTiles : (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[24px] font-extrabold">Games</h2>
-                    <span className="bg-lime text-[#121212] rounded-[14px] px-3 py-[5px] text-[12px] font-extrabold">
-                      You: {mySubmitted} of {totalGames}
+                    </div>
+                    <span className="bar-score font-serif text-[36px] md:text-[56px] leading-none w-[56px] md:w-[96px] text-right tabular-nums shrink-0">
+                      {played ? <CountUp value={row.totalPoints} /> : <span className="text-muted">–</span>}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {data.today.games.map((dg) => {
-                      const g = GAMES[dg.gameSlug];
-                      const needs = Math.max(0, dg.requiredCount - dg.submissionCount);
-                      return (
-                        <button
-                          key={dg.gameSlug}
-                          type="button"
-                          onClick={() => openGame(g.slug)}
-                          className="bg-surface rounded-2xl pt-3 px-3 pb-3.5 text-left space-y-2"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span
-                              style={{ backgroundColor: g.color }}
-                              className="w-1.5 h-5 rounded-[3px] shrink-0"
-                            />
-                            <span className="text-[15px] font-extrabold truncate">{g.name}</span>
-                          </div>
-                          <div className="text-[11px] text-muted">
-                            {dg.submissionCount} of {dg.totalPlayers} submitted
-                            {dg.status === "Pending" && needs > 0 ? ` · needs ${needs}` : ""}
-                          </div>
-                          <div>{statusChip(dg.status, true)}</div>
-                          <div className="flex flex-wrap gap-1">{playerChips(dg, "sm")}</div>
-                        </button>
-                      );
-                    })}
-                    {data.today.games.length % 2 === 1 && (
-                      <div className="bg-surface rounded-2xl p-3 flex items-start gap-2 text-[12px] text-muted">
-                        <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span>{pendingNote}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                )}
-                  </>
-                )}
-              </div>
+                );
+              })}
+            </div>
+          );
 
-              {/* ============ DESKTOP ============ */}
-              <div className="hidden md:block space-y-7">
-                <div className="flex items-center justify-between gap-6">
-                  <div className="space-y-2">
-                    <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
-                      League
-                    </h1>
-                    <p className="text-[16px] text-muted">{subtitle}</p>
-                    <div className="pt-2">{toggle}</div>
-                  </div>
-                  {todayView !== "leagues" && (
-                  <div className="flex items-center gap-4">
-                    {weekView ? (
-                      <button
-                        type="button"
-                        onClick={() => setIsPasteOpen(true)}
-                        className="h-12 px-6 rounded-full bg-lime text-[#121212] text-[15px] font-extrabold inline-flex items-center gap-2"
-                      >
-                        <ClipboardPaste className="w-4 h-4" />
-                        Paste result
-                      </button>
-                    ) : (
-                    <div className="bg-lime text-[#121212] rounded-[32px] flex items-center gap-5 py-3 pl-7 pr-3">
-                      <span className="font-serif text-[56px] leading-[56px] tracking-[-2px] whitespace-nowrap">
-                        {mySubmitted} of {totalGames}
-                      </span>
-                      <div className="text-[14px] leading-tight">
-                        <div className="font-bold">games submitted</div>
-                        <div className="opacity-70">
-                          {Math.max(0, totalGames - mySubmitted)} left to play
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsPasteOpen(true)}
-                        className="h-12 px-[22px] rounded-full bg-[#121212] text-text text-[15px] font-extrabold inline-flex items-center gap-2"
-                      >
-                        <ClipboardPaste className="w-4 h-4" />
-                        Paste result
-                      </button>
-                    </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={shareHere}
-                      className="h-12 px-[22px] rounded-full border-[1.5px] border-line text-[14px] font-bold inline-flex items-center gap-2 hover:bg-surface"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      {weekView ? "Share this week" : "Share my day"}
-                    </button>
-                  </div>
-                  )}
-                </div>
+          const leadStrip = (
+            <div className="bg-surface rounded-[14px] px-4 md:px-5 py-3 md:py-3.5 flex items-center gap-2.5 md:gap-3 text-[13px] md:text-[14px]">
+              <Zap className="w-4 h-4 text-lime shrink-0" />
+              <span className="min-w-0">{leadText}</span>
+            </div>
+          );
 
-                {todayView === "leagues" ? (
-                  leaguesView
-                ) : (
-                  <>
-                {todayView === "today" && banner}
-                <div className={weekView ? "space-y-6" : "grid grid-cols-[minmax(0,1fr)_484px] gap-6 items-start"}>
-                <div className="space-y-4 min-w-0">
-                <div className="space-y-2.5">
-                  {standings.map((row, idx) => {
-                    const isMe = row.player.id === currentUserId;
-                    const played = row.gamesPlayed > 0;
-                    const pct = played ? Math.max(30, (row.totalPoints / maxPts) * 100) : 30;
-                    return (
-                      <div key={row.player.id} className="bar-row flex items-center gap-4 h-[72px]">
-                        <span
-                          className={`font-serif text-[40px] leading-none w-10 shrink-0 ${
-                            row.rank === 1 && played ? "text-lime" : "text-muted"
-                          }`}
-                        >
-                          {row.rank}
-                        </span>
-                        <div className="flex-1 relative h-[72px]">
-                          <button
-                            type="button"
-                            onClick={() => openPlayer(row.player.id)}
-                            style={{
-                              width: `${pct}%`,
-                              animationDelay: `${idx * 60}ms`,
-                              ...(played ? { backgroundColor: row.player.color } : {}),
-                            }}
-                            className={`bar-fill grow-in absolute left-0 top-0 h-[72px] rounded-2xl text-left px-6 flex flex-col justify-center ${
-                              played ? "text-[#121212]" : "text-muted bg-surface"
-                            }`}
-                          >
-                            <div className="text-[22px] font-bold tracking-[-0.3px] leading-tight truncate">
-                              {row.player.name}
-                              {isMe ? " (you)" : ""}
-                            </div>
-                            <div className={`text-[13px] font-medium ${played ? "opacity-70" : ""}`}>
-                              {submittedLabel(row)}
-                            </div>
-                          </button>
-                        </div>
-                        <span className="bar-score font-serif text-[48px] leading-none w-[96px] text-right tabular-nums shrink-0">
-                          {played ? <CountUp value={row.totalPoints} /> : <span className="text-muted">–</span>}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="bg-surface rounded-[14px] px-4 py-3 flex items-center gap-2.5 text-[13px] text-muted">
-                  <Info className="w-4 h-4 shrink-0" />
-                  <span>
-                    How points work: points come from your place in each qualified game. Players
-                    with the same result share a place.
+          const gameTile = (dg: (typeof data.today.games)[number]) => {
+            const g = GAMES[dg.gameSlug];
+            const done = data.players.filter((p) => dg.rankings.some((r) => r.playerId === p.id));
+            const isCounted = dg.status === "Qualified";
+            return (
+              <button
+                key={dg.gameSlug}
+                type="button"
+                onClick={() => openGame(g.slug)}
+                className={`game-tile rounded-[14px] p-3 md:p-3.5 text-left space-y-2.5 min-w-0 ${
+                  isCounted ? "bg-surface2" : "bg-transparent outline outline-1 outline-line -outline-offset-1"
+                }`}
+              >
+                <div className="flex items-center gap-2 md:gap-2.5">
+                  <GameIcon slug={g.slug} size={26} />
+                  <span className="text-[13px] md:text-[14px] font-semibold leading-tight flex-1 min-w-0 line-clamp-2 [overflow-wrap:anywhere]">{g.name}</span>
+                  <span className={`text-[12px] font-bold tabular-nums shrink-0 ${isCounted ? "text-lime" : "text-muted"}`}>
+                    {dg.submissionCount}/{dg.totalPlayers}
                   </span>
                 </div>
-                </div>
-                {weekView ? <div className="min-w-0">{weekTiles}</div> : (
-                <div className="bg-surface rounded-[24px] p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[20px] font-bold">Games today</h2>
-                    <span className="text-[12px] text-muted">{data.today.games.filter((g) => g.submissionCount > 0).length} of {data.today.games.length} played</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {data.today.games.filter((dg) => dg.submissionCount > 0).map((dg) => {
-                      const g = GAMES[dg.gameSlug];
-                      const done = data.players.filter((p) => dg.rankings.some((r) => r.playerId === p.id));
-                      return (
-                        <button
-                          key={dg.gameSlug}
-                          type="button"
-                          onClick={() => openGame(g.slug)}
-                          className="game-tile bg-surface2 rounded-[16px] p-3.5 text-left space-y-2.5"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <GameIcon slug={g.slug} size={32} />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[14px] font-semibold truncate">{g.name}</div>
-                              <div className="text-[12px] text-muted">
-                                {dg.submissionCount}/{dg.totalPlayers}
-                                {dg.status === "Pending" ? " · pending" : ""}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {done.slice(0, 3).map((p) => (
-                              <span key={p.id} style={{ backgroundColor: p.color }} className="rounded-full px-2 py-[2px] text-[11px] font-bold text-[#121212]">
-                                {p.name}
-                              </span>
-                            ))}
-                            {done.length > 3 && (
-                              <span className="rounded-full px-2 py-[2px] text-[11px] font-bold text-muted border border-line">+{done.length - 3}</span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {data.today.games.some((dg) => dg.submissionCount === 0) && (
-                    <div className="rounded-[14px] bg-bg/50 px-3.5 py-3 text-[12px] text-muted">
-                      <span className="font-semibold text-text">Not played yet: </span>
-                      {data.today.games.filter((dg) => dg.submissionCount === 0).map((dg) => GAMES[dg.gameSlug].name).join(", ")}
-                    </div>
+                <div className="flex flex-wrap gap-1">
+                  {done.slice(0, 3).map((p) => (
+                    <span key={p.id} style={{ backgroundColor: p.color }} className="rounded-[6px] px-1.5 py-[1px] text-[11px] font-semibold text-[#121212]">
+                      {p.name}
+                    </span>
+                  ))}
+                  {done.length > 3 && (
+                    <span className="rounded-[6px] px-1.5 py-[1px] text-[11px] font-semibold text-muted bg-[#121212]/40">+{done.length - 3}</span>
                   )}
-                  <div className="text-[12px] text-muted leading-4">{pendingNote}</div>
-                  <button
-                    type="button"
-                    onClick={() => setIsPasteOpen(true)}
-                    className="btn-primary w-full h-12 rounded-full bg-lime text-[#121212] text-[14px] font-bold inline-flex items-center justify-center gap-2"
+                </div>
+              </button>
+            );
+          };
+
+          const gamesPanel = (
+            <div className="md:bg-surface md:rounded-[24px] md:p-6 space-y-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <div className="hidden md:block text-[13px] text-muted">Games today</div>
+                  <h2 className="text-[22px] md:text-[26px] font-bold tracking-[-0.3px]">
+                    <span className="md:hidden">Games today</span>
+                    <span className="hidden md:inline">
+                      {counted} of {totalGames} counted
+                    </span>
+                  </h2>
+                </div>
+                <span className="text-[12px] text-muted text-right">
+                  <span className="md:hidden">
+                    {counted} of {totalGames} counted
+                  </span>
+                  <span className="hidden md:inline">½ of active players = counts</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {playedGames.map(gameTile)}
+                {/* phone: quiet games as dimmed tiles */}
+                {quietGames.map((dg) => (
+                  <div key={dg.gameSlug} className="md:hidden rounded-[14px] p-3 outline outline-1 outline-line -outline-offset-1 opacity-50 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <GameIcon slug={dg.gameSlug} size={26} />
+                      <span className="text-[13px] font-semibold flex-1 min-w-0 truncate">{GAMES[dg.gameSlug].name}</span>
+                      <span className="text-[12px] font-bold text-muted">0/{dg.totalPlayers}</span>
+                    </div>
+                    <div className="text-[11px] text-muted">No one yet</div>
+                  </div>
+                ))}
+              </div>
+              {quietGames.length > 0 && (
+                <div className="hidden md:flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] outline outline-1 outline-line -outline-offset-1 px-3.5 py-3">
+                  <span className="text-[12px] font-semibold text-muted">Still quiet</span>
+                  {quietGames.map((dg) => (
+                    <button
+                      key={dg.gameSlug}
+                      type="button"
+                      onClick={() => openGame(dg.gameSlug)}
+                      className="inline-flex items-center gap-1.5 text-[12px] font-semibold hover:text-lime"
+                    >
+                      <GameIcon slug={dg.gameSlug} size={18} />
+                      {GAMES[dg.gameSlug].name}
+                      <span className="text-muted">0/{dg.totalPlayers}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => (hasJoined ? setIsPasteOpen(true) : openJoin("both"))}
+                className="hidden md:flex btn-primary w-full h-14 rounded-[16px] bg-lime text-[#121212] text-[16px] font-bold items-center justify-between px-5"
+              >
+                Paste today&apos;s result
+                <ClipboardPaste className="w-5 h-5" />
+              </button>
+            </div>
+          );
+
+          const previousCards = (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              {data.leagues.previous.length === 0 && (
+                <div className="bg-surface rounded-[20px] p-6 text-muted text-[14px] md:col-span-2">
+                  The first league finishes on {firstLeagueEnds}.
+                </div>
+              )}
+              {data.leagues.previous.map((w) => {
+                const rows = w.standings.filter((r) => r.played);
+                const win = rows[0];
+                const run = rows[1];
+                if (!win) return null;
+                return (
+                  <div
+                    key={w.startDate}
+                    style={{ backgroundColor: win.color }}
+                    className="game-tile relative rounded-[20px] text-[#121212] p-4 md:p-5 flex items-center gap-4"
                   >
-                    <ClipboardPaste className="w-4 h-4" />
-                    Paste result
-                  </button>
+                    <button type="button" onClick={() => openWeekResults(w)} className="absolute inset-0 rounded-[20px]" aria-label={`Open ${w.label}`} />
+                    <span className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#121212] text-[18px] md:text-[20px] font-bold flex items-center justify-center shrink-0" style={{ color: win.color }}>
+                      {win.name.slice(0, 1)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-semibold opacity-70">
+                        Week {isoWeek(w.startDate)} · {w.label}
+                      </div>
+                      <div className="text-[22px] md:text-[26px] font-bold tracking-[-0.5px] leading-tight truncate">{win.name} won</div>
+                      <div className="text-[12px] opacity-70 truncate">
+                        {run ? `Runner-up ${run.name} ${run.points}` : "No runner-up"}
+                      </div>
+                    </div>
+                    <span className="font-serif text-[44px] md:text-[52px] leading-none">{win.points}</span>
+                    <button
+                      type="button"
+                      onClick={() => shareFinal(w)}
+                      aria-label="Share this league"
+                      className="relative z-10 w-9 h-9 rounded-full bg-[#121212]/10 hover:bg-[#121212]/20 flex items-center justify-center shrink-0"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          );
+
+          return (
+            <div className="space-y-5 md:space-y-6">
+              {todayView === "today" && banner}
+              <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_484px] lg:gap-12 lg:items-start space-y-6 lg:space-y-0">
+                <div className={`space-y-5 md:space-y-6 min-w-0 ${todayView !== "today" ? "lg:col-span-2" : ""}`}>
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <h1 className="text-[44px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">League</h1>
+                    <div className="flex items-center gap-2">
+                      {tabs}
+                      {todayView !== "leagues" && (
+                        <button
+                          type="button"
+                          aria-label={weekView ? "Share this week" : "Share my day"}
+                          onClick={shareHere}
+                          className="btn-secondary w-10 h-10 md:w-11 md:h-11 rounded-full bg-surface flex items-center justify-center shrink-0"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {todayView === "leagues" ? (
+                    previousCards
+                  ) : (
+                    <>
+                      {bars}
+                      {leadStrip}
+                      {weekView && weekTiles}
+                    </>
+                  )}
                 </div>
-                )}
-                </div>
-                  </>
-                )}
+                {todayView === "today" && gamesPanel}
               </div>
             </div>
           );
@@ -1258,501 +1237,17 @@ export function FatherdleApp({
         {/* =========================================================
             3. GLOBAL STATISTICS VIEW (Screens 3 & 4)
            ========================================================= */}
-        {activeTab === "statistics" && currentUserStandingRow && (
+        {activeTab === "statistics" && (
           <div className="space-y-7">
             {/* Title & Period Selector */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
+              <h1 className="text-[44px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">
                 Statistics
               </h1>
               {renderPeriodSelector()}
             </div>
 
             <StatsDeck stats={data.groupStats} />
-
-            {/* Row 1: Standings + Points Over Time */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* League Standings (2.3) */}
-              <div className="lg:col-span-5 bg-surface border border-line/50 rounded-[22px] p-6 flex flex-col justify-between space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[19px] font-bold tracking-tight">
-                      {preset === "today"
-                        ? "Today's standings"
-                        : preset === "week"
-                        ? "Weekly standings"
-                        : preset === "month"
-                        ? "Monthly standings"
-                        : "League standings"}
-                    </h2>
-                    {data.period.prevLabel && (
-                      <span className="text-[11px] text-muted">
-                        vs {data.period.prevLabel}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-line/60 text-[11px] text-muted font-semibold">
-                          <th className="py-2 font-medium">Player</th>
-                          <th className="py-2 text-right font-medium">Pts</th>
-                          <th className="py-2 text-right font-medium">1st</th>
-                          <th
-                            className="py-2 text-right font-medium"
-                            title="Qualified games / Total submitted"
-                          >
-                            Games
-                          </th>
-                          <th className="py-2 text-right font-medium">
-                            {preset === "week" ? "vs last wk" : "Change"}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-line/40 text-[14px] tabular-nums">
-                        {data.stats.standings.map((row) => {
-                          const isMe = row.player.id === currentUserId;
-                          const change = row.positionChange;
-                          return (
-                            <tr key={row.player.id} className="group">
-                              <td className="py-3 pr-2">
-                                <div className="flex items-center gap-3">
-                                  <span
-                                    className={`font-serif text-[22px] w-4 leading-none ${
-                                      row.rank === 1 ? "text-lime" : "text-text"
-                                    }`}
-                                  >
-                                    {row.rank}
-                                  </span>
-                                  <span
-                                    style={{ backgroundColor: row.player.color }}
-                                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setViewedPlayerId(row.player.id);
-                                      setActiveTab("players");
-                                    }}
-                                    className="font-bold text-text hover:underline truncate"
-                                  >
-                                    {row.player.name}
-                                    {isMe ? " (you)" : ""}
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="py-3 text-right font-extrabold text-text text-[15px]">
-                                {row.totalPoints}
-                              </td>
-                              <td className="py-3 text-right text-muted font-medium">
-                                {row.firstPlaces}
-                              </td>
-                              <td
-                                className="py-3 text-right text-muted font-medium"
-                                title={`${row.qualifiedGamesPlayed} qualified of ${row.gamesPlayed} submitted`}
-                              >
-                                {row.qualifiedGamesPlayed}
-                                {row.gamesPlayed > row.qualifiedGamesPlayed && (
-                                  <span className="text-[11px] text-muted/70">
-                                    /{row.gamesPlayed}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3 text-right font-bold text-[12px]">
-                                {change === null || change === 0 ? (
-                                  <span className="text-muted">–</span>
-                                ) : change > 0 ? (
-                                  <span className="text-lime">+{change}</span>
-                                ) : (
-                                  <span className="text-orange">{change}</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="bg-surface2/70 rounded-2xl p-3.5 flex items-start gap-2.5">
-                  <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
-                  <div className="text-[11px] leading-relaxed text-muted">
-                    <strong className="text-text block">How points work</strong>
-                    Points come from your place in each qualified game. Players with the same
-                    result share a place. Position change compares with the equivalent previous
-                    period ({data.period.prevLabel || "prior window"}).
-                  </div>
-                </div>
-              </div>
-
-              {/* Points Over Time (2.4) */}
-              <div className="lg:col-span-7 bg-surface border border-line/50 rounded-[22px] p-6 flex flex-col justify-between space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Points over time
-                  </h2>
-                  <div className="bg-surface2 rounded-full p-0.5 flex items-center text-[11px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setPointsChartMode("cumulative")}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        pointsChartMode === "cumulative"
-                          ? "bg-text text-[#121212]"
-                          : "text-muted hover:text-text"
-                      }`}
-                    >
-                      Cumulative
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPointsChartMode("daily")}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        pointsChartMode === "daily"
-                          ? "bg-text text-[#121212]"
-                          : "text-muted hover:text-text"
-                      }`}
-                    >
-                      Daily
-                    </button>
-                  </div>
-                </div>
-
-                <PointsOverTimeChart
-                  series={data.stats.timeSeries.series}
-                  players={data.players}
-                  visiblePlayerIds={visiblePlayerIds}
-                  mode={pointsChartMode}
-                />
-
-                {/* Interactive Player Filter Pills */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  {data.players.map((p) => {
-                    const active = visiblePlayerIds.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => toggleVisiblePlayer(p.id)}
-                        style={{
-                          borderColor: active ? p.color : "#3A3935",
-                          opacity: active ? 1 : 0.45,
-                        }}
-                        className="px-3 py-1 rounded-full border text-[12px] font-bold flex items-center gap-1.5 transition-opacity"
-                      >
-                        <span
-                          style={{ backgroundColor: p.color }}
-                          className="w-2 h-2 rounded-full"
-                        />
-                        <span>{p.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Position History (Bump Chart) + Points by Game (Stacked Bar) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Position History (2.5) */}
-              <div className="lg:col-span-6 bg-surface border border-line/50 rounded-[22px] p-6 flex flex-col justify-between space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Position history
-                  </h2>
-                  <span className="text-xs text-muted">1 = top</span>
-                </div>
-
-                <PositionBumpChart
-                  series={data.stats.timeSeries.series}
-                  players={data.players}
-                  visiblePlayerIds={visiblePlayerIds}
-                />
-
-                <div className="text-[12px] text-muted">
-                  {data.stats.timeSeries.lastLeadChange
-                    ? `${data.stats.timeSeries.lastLeadChange.newLeaderName} took the lead on ${data.stats.timeSeries.lastLeadChange.date.slice(
-                        8,
-                        10
-                      )} Nov. The lead has changed ${
-                        data.stats.timeSeries.leadChangesCount === 1
-                          ? "once"
-                          : `${data.stats.timeSeries.leadChangesCount} times`
-                      } in this period.`
-                    : `${data.stats.standings[0]?.player.name || "The leader"} held first place throughout this period.`}
-                </div>
-              </div>
-
-              {/* Points Breakdown (2.6) */}
-              <div className="lg:col-span-6 bg-surface border border-line/50 rounded-[22px] p-6 flex flex-col justify-between space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Points by game
-                  </h2>
-                  <div className="bg-surface2 rounded-full p-0.5 flex items-center text-[11px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setBreakdownMode("by_player")}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        breakdownMode === "by_player"
-                          ? "bg-text text-[#121212]"
-                          : "text-muted hover:text-text"
-                      }`}
-                    >
-                      By player
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBreakdownMode("by_game")}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        breakdownMode === "by_game"
-                          ? "bg-text text-[#121212]"
-                          : "text-muted hover:text-text"
-                      }`}
-                    >
-                      By game
-                    </button>
-                  </div>
-                </div>
-
-                <PointsBreakdownChart
-                  standings={data.stats.standings}
-                  mode={breakdownMode}
-                />
-              </div>
-            </div>
-
-            {/* Row 3: Automatic Factual Insights (3) + Activity Calendar (2.8) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Automatic Insights */}
-              <div className="lg:col-span-5 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <h2 className="text-[19px] font-bold tracking-tight">
-                  {preset === "today"
-                    ? "Today's insights"
-                    : preset === "week"
-                    ? "This week"
-                    : "Key findings"}
-                </h2>
-
-                {data.stats.insights.length === 0 ? (
-                  <p className="text-sm text-muted">
-                    More results are needed to calculate insights for this period.
-                  </p>
-                ) : (
-                  <div className="divide-y divide-line/50">
-                    {data.stats.insights.map((ins) => (
-                      <div
-                        key={ins.id}
-                        className="py-3.5 flex items-center gap-4"
-                      >
-                        <div
-                          style={{ color: ins.leadColor }}
-                          className="font-serif text-[36px] leading-none w-14 shrink-0 tabular-nums"
-                        >
-                          {ins.leadValue}
-                        </div>
-                        <div className="text-[13px] leading-snug text-text font-medium">
-                          {ins.text}
-                          {ins.detail && (
-                            <span className="block text-[11px] text-muted mt-0.5">
-                              {ins.detail}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Activity Calendar Heatmap */}
-              <div className="lg:col-span-7 bg-surface border border-line/50 rounded-[22px] p-6 space-y-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Activity
-                  </h2>
-                  <div className="bg-surface2 rounded-full p-0.5 flex items-center text-[11px] font-bold">
-                    {(
-                      [
-                        { id: "submissions", label: "Submissions" },
-                        { id: "players", label: "Players" },
-                        { id: "points", label: "Points" },
-                      ] as const
-                    ).map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setCalendarMetric(m.id)}
-                        className={`px-3 py-1 rounded-full transition-colors ${
-                          calendarMetric === m.id
-                            ? "bg-text text-[#121212]"
-                            : "text-muted hover:text-text"
-                        }`}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                  <div className="md:col-span-7">
-                    <ActivityCalendarHeatmap
-                      days={data.stats.activityCalendar}
-                      metric={calendarMetric}
-                      selectedDate={selectedCalendarDate}
-                      onSelectDate={setSelectedCalendarDate}
-                    />
-                  </div>
-
-                  {selectedCalendarDayObj && (
-                    <div className="md:col-span-5 space-y-2.5 border-t md:border-t-0 md:border-l border-line/50 pt-4 md:pt-0 md:pl-5">
-                      <div className="text-[18px] font-extrabold text-text">
-                        {selectedCalendarDayObj.label}
-                      </div>
-                      <div className="divide-y divide-line/40 text-[13px] tabular-nums">
-                        <div className="py-1.5 flex justify-between">
-                          <span className="text-muted">Submissions</span>
-                          <span className="font-bold text-text">
-                            {selectedCalendarDayObj.totalSubmissions}
-                          </span>
-                        </div>
-                        <div className="py-1.5 flex justify-between">
-                          <span className="text-muted">Active players</span>
-                          <span className="font-bold text-text">
-                            {selectedCalendarDayObj.activePlayers}
-                          </span>
-                        </div>
-                        <div className="py-1.5 flex justify-between">
-                          <span className="text-muted">Qualified games</span>
-                          <span className="font-bold text-text">
-                            {selectedCalendarDayObj.qualifiedGames}
-                          </span>
-                        </div>
-                        <div className="py-1.5 flex justify-between">
-                          <span className="text-muted">Winner</span>
-                          <span className="font-bold text-text">
-                            {selectedCalendarDayObj.dailyWinnerName || "–"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Row 4: Head-to-Head Player Comparison (Section 2.7 - No Radar Charts!) */}
-            <div className="bg-surface border border-line/50 rounded-[22px] p-6 space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Player comparison
-                  </h2>
-                  <p className="text-xs text-muted mt-0.5">
-                    Select two or more players to compare league metrics across{" "}
-                    {data.period.label}.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {data.players.map((p) => {
-                    const selected = comparedPlayerIds.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => toggleComparedPlayer(p.id)}
-                        style={{
-                          borderColor: selected ? p.color : "#3A3935",
-                          backgroundColor: selected ? "rgba(255,255,255,0.04)" : "transparent",
-                        }}
-                        className="px-3 py-1 rounded-full border text-xs font-bold flex items-center gap-1.5"
-                      >
-                        <span
-                          style={{ backgroundColor: p.color }}
-                          className="w-2 h-2 rounded-full"
-                        />
-                        <span>{p.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse tabular-nums">
-                  <thead>
-                    <tr className="border-b border-line/60 text-[11px] text-muted">
-                      <th className="py-2.5 font-medium">Metric</th>
-                      {comparedPlayerIds.map((pid) => {
-                        const row = data.stats.standings.find((r) => r.player.id === pid);
-                        if (!row) return null;
-                        return (
-                          <th key={pid} className="py-2.5 text-right font-bold text-text">
-                            <span className="inline-flex items-center gap-1.5">
-                              <span
-                                style={{ backgroundColor: row.player.color }}
-                                className="w-2 h-2 rounded-full"
-                              />
-                              {row.player.name}
-                            </span>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line/40 text-[14px]">
-                    {[
-                      {
-                        label: "Total points",
-                        render: (r: PlayerStandingRow) => `${r.totalPoints}`,
-                      },
-                      {
-                        label: "First-place finishes",
-                        render: (r: PlayerStandingRow) => `${r.firstPlaces}`,
-                      },
-                      {
-                        label: "Average placement (lower is better)",
-                        render: (r: PlayerStandingRow) =>
-                          r.averagePlacement !== null ? r.averagePlacement.toFixed(2) : "–",
-                      },
-                      {
-                        label: "Qualified games played",
-                        render: (r: PlayerStandingRow) =>
-                          `${r.qualifiedGamesPlayed} (${r.gamesPlayed} total)`,
-                      },
-                      {
-                        label: "Win rate",
-                        render: (r: PlayerStandingRow) =>
-                          r.winRate !== null ? `${Math.round(r.winRate * 100)}%` : "–",
-                      },
-                      {
-                        label: "Points per qualified game",
-                        render: (r: PlayerStandingRow) =>
-                          r.pointsPerQualifiedGame !== null
-                            ? r.pointsPerQualifiedGame.toFixed(2)
-                            : "–",
-                      },
-                    ].map((metricRow) => (
-                      <tr key={metricRow.label}>
-                        <td className="py-3 text-muted font-medium">{metricRow.label}</td>
-                        {comparedPlayerIds.map((pid) => {
-                          const row = data.stats.standings.find((r) => r.player.id === pid);
-                          if (!row) return null;
-                          return (
-                            <td key={pid} className="py-3 text-right font-bold text-text">
-                              {metricRow.render(row)}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         )}
 

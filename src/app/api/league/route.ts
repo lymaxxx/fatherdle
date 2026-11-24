@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
       todayDate,
       leagues,
       feed,
-      groupStats: buildGroupStats(period.startDate, period.endDate, allSubmissions, players, leagues),
+      groupStats: buildGroupStats(period.startDate, period.endDate, allSubmissions, players, leagues, period.preset === "all" ? "All time" : period.label, todayDate),
       period,
       players,
       games: Object.values(GAMES).filter((g) => g.slug !== "custom"),
