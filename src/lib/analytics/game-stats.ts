@@ -1,8 +1,15 @@
 import type { Submission } from "../types";
 
+export interface GameStatsBar {
+  label: string;
+  value: number;
+  color?: string;
+}
+
 export interface GameStatsPanel {
+  results: number;
   kpis: Array<{ label: string; value: string; sub?: string }>;
-  distributions: Array<{ title: string; bars: Array<{ label: string; value: number }> }>;
+  distributions: Array<{ title: string; note?: string; kind?: "rows"; bars: GameStatsBar[] }>;
   tiles: Array<{ label: string; value: string; sub?: string }>;
 }
 
@@ -24,29 +31,28 @@ function bucketed(values: number[], edges: number[], unit = ""): Array<{ label: 
   });
 }
 
-function attemptsPanel(subs: Submission[], extra: GameStatsPanel["tiles"] = []): GameStatsPanel {
+function attemptsPanel(subs: Submission[], extra: GameStatsPanel["tiles"] = []): Omit<GameStatsPanel, "results"> {
   const solved = subs.filter((s) => !s.failed);
   const dist = histogram(solved.map((s) => s.primaryValue), ["1", "2", "3", "4", "5", "6"], 1);
-  dist.push({ label: "X", value: subs.filter((s) => s.failed).length });
+  dist.push({ label: "Fail", value: subs.filter((s) => s.failed).length });
   return {
     kpis: [
-      { label: "Average guesses", value: solved.length ? fmt(avg(solved.map((s) => s.primaryValue))) : "–" },
-      { label: "One-shot solves", value: String(solved.filter((s) => s.primaryValue === 1).length) },
-      { label: "Fail rate", value: subs.length ? `${Math.round((subs.filter((s) => s.failed).length / subs.length) * 100)}%` : "–" },
+      { label: "avg guesses", value: solved.length ? fmt(avg(solved.map((s) => s.primaryValue))) : "–" },
+      { label: "one-shot solves", value: String(solved.filter((s) => s.primaryValue === 1).length) },
+      { label: "failed", value: subs.length ? `${Math.round((subs.filter((s) => s.failed).length / subs.length) * 100)}%` : "–" },
     ],
     distributions: [{ title: "Guess distribution", bars: dist }],
     tiles: extra,
   };
 }
 
-function scorePanel(subs: Submission[], edges: number[], unit: string, scoreLabel: string, higherBetter = true, extra: GameStatsPanel["tiles"] = []): GameStatsPanel {
+function scorePanel(subs: Submission[], edges: number[], unit: string, scoreLabel: string, higherBetter = true, extra: GameStatsPanel["tiles"] = []): Omit<GameStatsPanel, "results"> {
   const v = subs.filter((s) => !s.failed).map((s) => s.primaryValue);
   const best = v.length ? (higherBetter ? Math.max(...v) : Math.min(...v)) : null;
   return {
     kpis: [
-      { label: `Average ${scoreLabel}`, value: v.length ? Math.round(avg(v)).toLocaleString("en-GB") : "–" },
-      { label: `Best ${scoreLabel}`, value: best === null ? "–" : best.toLocaleString("en-GB") },
-      { label: "Results", value: String(subs.length) },
+      { label: `avg ${scoreLabel}`, value: v.length ? Math.round(avg(v)).toLocaleString("en-GB") : "–" },
+      { label: `best ${scoreLabel}`, value: best === null ? "–" : best.toLocaleString("en-GB") },
     ],
     distributions: [{ title: `${scoreLabel[0].toUpperCase()}${scoreLabel.slice(1)} spread`, bars: bucketed(v, edges, unit) }],
     tiles: extra,
@@ -66,6 +72,10 @@ function evenEdges(values: number[], n = 6): number[] {
 const COLOURS: Record<string, string> = { "🟨": "Yellow", "🟩": "Green", "🟦": "Blue", "🟪": "Purple" };
 
 export function buildGameStats(slug: string, subs: Submission[]): GameStatsPanel {
+  return { results: subs.length, ...buildPanels(slug, subs) };
+}
+
+function buildPanels(slug: string, subs: Submission[]): Omit<GameStatsPanel, "results"> {
   const nums = subs.filter((s) => !s.failed).map((s) => s.primaryValue);
   switch (slug) {
     case "wordle": {
@@ -105,10 +115,9 @@ export function buildGameStats(slug: string, subs: Submission[]): GameStatsPanel
       const tens = nums.filter((n) => n >= 10).length;
       return {
         kpis: [
-          { label: "Average score", value: nums.length ? fmt(avg(nums)) : "–" },
-          { label: "Perfect tens", value: String(tens) },
-          { label: "Results", value: String(subs.length) },
-        ],
+          { label: "avg score", value: nums.length ? fmt(avg(nums)) : "–" },
+          { label: "perfect tens", value: String(tens) },
+            ],
         distributions: [{ title: "Score out of 10", bars: histogram(nums, Array.from({ length: 11 }, (_, i) => String(i)), 0) }],
         tiles: [],
       };
@@ -116,10 +125,9 @@ export function buildGameStats(slug: string, subs: Submission[]): GameStatsPanel
     case "poople": {
       return {
         kpis: [
-          { label: "Average rank", value: nums.length ? fmt(avg(nums)) : "–" },
-          { label: "Best rank", value: nums.length ? String(Math.min(...nums)) : "–" },
-          { label: "Results", value: String(subs.length) },
-        ],
+          { label: "avg rank", value: nums.length ? fmt(avg(nums)) : "–" },
+          { label: "best rank", value: nums.length ? String(Math.min(...nums)) : "–" },
+            ],
         distributions: [{ title: "Rank ladder", bars: bucketed(nums, evenEdges(nums)) }],
         tiles: [],
       };
@@ -146,20 +154,32 @@ export function buildGameStats(slug: string, subs: Submission[]): GameStatsPanel
         run = ok ? run + 1 : 0;
         bestRun = Math.max(bestRun, run);
       }
-      const lastEntries = ["Yellow", "Green", "Blue", "Purple"].map((c) => ({ label: c, value: lastColour.get(c) || 0 }));
+      const COL: Record<string, string> = { Purple: "#BA81C5", Blue: "#B0C4EF", Green: "#A0C35A", Yellow: "#F9DF6D" };
+      const lastEntries = ["Purple", "Blue", "Green", "Yellow"]
+        .map((c) => ({ label: c, value: lastColour.get(c) || 0, color: COL[c] }))
+        .sort((a, b) => b.value - a.value);
+      const solvedSubs = subs.filter((x) => !x.failed);
       return {
         kpis: [
-          { label: "Perfect games", value: String(perfect), sub: `of ${subs.length}` },
-          { label: "Average mistakes", value: subs.length ? fmt(avg(mistakes)) : "–" },
-          { label: "Failed", value: String(subs.filter((s) => s.failed).length) },
+          { label: "perfect, 0 mistakes", value: subs.length ? `${Math.round((perfect / subs.length) * 100)}%` : "–" },
+          { label: "avg mistakes", value: solvedSubs.length ? fmt(avg(solvedSubs.map((x) => x.primaryValue))) : "–" },
+          { label: "failed (<4 groups)", value: subs.length ? `${Math.round((subs.filter((x) => x.failed).length / subs.length) * 100)}%` : "–" },
         ],
         distributions: [
-          { title: "Mistakes", bars: histogram(mistakes, ["0", "1", "2", "3", "4"], 0) },
-          { title: "Colour solved last", bars: lastEntries },
+          {
+            title: "Mistakes",
+            note: `${subs.length} results · fewer is better`,
+            bars: [
+              ...histogram(subs.filter((x) => !x.failed).map((x) => Math.min(3, Math.round(x.primaryValue))), ["0", "1", "2", "3"], 0),
+              { label: "Fail", value: subs.filter((x) => x.failed).length },
+            ],
+          },
+          { title: "Which group falls last", note: "How often each colour is solved 4th", kind: "rows", bars: lastEntries },
         ],
         tiles: [
-          { label: "Purple-first club", value: String(purpleFirst), sub: "solved purple first" },
-          { label: "Perfect streak", value: String(bestRun), sub: "longest, in this range" },
+          { label: "Longest perfect streak", value: `${bestRun} ${bestRun === 1 ? "day" : "days"}`, sub: "in this range" },
+          { label: "Purple-first solves", value: String(purpleFirst), sub: "purple found first" },
+          { label: "Failed puzzles", value: String(subs.filter((x) => x.failed).length), sub: "fewer than four groups" },
         ],
       };
     }
@@ -171,10 +191,9 @@ export function buildGameStats(slug: string, subs: Submission[]): GameStatsPanel
       }).length;
       return {
         kpis: [
-          { label: "Average hints", value: hints.length ? fmt(avg(hints)) : "–" },
-          { label: "No-hint days", value: String(hints.filter((h) => h === 0).length) },
-          { label: "Results", value: String(subs.length) },
-        ],
+          { label: "avg hints", value: hints.length ? fmt(avg(hints)) : "–" },
+          { label: "no-hint days", value: String(hints.filter((h) => h === 0).length) },
+            ],
         distributions: [{ title: "Hints used", bars: histogram(hints, ["0", "1", "2", "3", "4+"].slice(0, 5), 0) }],
         tiles: [{ label: "Spangram first", value: String(spanFirst), sub: "found before the other words" }],
       };

@@ -4,8 +4,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BarChart3,
+  ArrowUpRight,
+  CalendarDays,
+  ChevronRight,
   ClipboardPaste,
   ExternalLink,
+  List,
+  Play,
   Gamepad2,
   Info,
   Share2,
@@ -36,8 +41,9 @@ import {
 } from "@/lib/analytics/game-modules";
 import { APP_WORDMARK, GAMES } from "@/lib/constants";
 import { AdminPanel } from "@/components/AdminPanel";
-import { FeedView, MondayBanner, PreviousLeagues } from "@/components/LeaguesAndFeed";
-import type { FeedItem, LeagueWeek, LeaguesPayload } from "@/lib/analytics/feed";
+import { MondayBanner, PreviousLeagues } from "@/components/LeaguesAndFeed";
+import type { FeedDay, FeedItem, LeagueWeek, LeaguesPayload } from "@/lib/analytics/feed";
+import { FeedPage } from "./FeedPage";
 import {
   ActivityCalendarHeatmap,
   GameHistoryChart,
@@ -60,7 +66,7 @@ interface LeagueApiResponse {
   todayDate: string;
   leagues: LeaguesPayload;
   groupStats: GroupStats;
-  feed: { items: FeedItem[]; hasMore: boolean; geoguessrPlayed: Record<string, string[]> };
+  feed: { items: FeedItem[]; hasMore: boolean; geoguessrPlayed: Record<string, string[]>; days: FeedDay[] };
   period: DatePeriod;
   players: Player[];
   games: GameConfig[];
@@ -166,6 +172,8 @@ export function FatherdleApp({
   const [todayView, setTodayView] = useState<"today" | "week" | "leagues">("today");
   const [feedFilter, setFeedFilter] = useState<GameSlug | "all">("all");
   const [feedLimit, setFeedLimit] = useState(60);
+  const [feedDate, setFeedDate] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(() => Date.now());
   const [dismissedBanner, setDismissedBanner] = useState("");
 
   const customKey = preset === "custom" ? `${customStart}|${customEnd}` : "";
@@ -179,6 +187,7 @@ export function FatherdleApp({
       });
       if (gameDate) params.set("gameDate", gameDate);
       if (feedLimit !== 60) params.set("feedLimit", String(feedLimit));
+      if (feedDate) params.set("feedDate", feedDate);
       if (preset === "custom" && customStart && customEnd) {
         params.set("start", customStart);
         params.set("end", customEnd);
@@ -200,6 +209,7 @@ export function FatherdleApp({
       }
       setLoadError(null);
       setData(json);
+      setLastUpdated(Date.now());
       if (json.players) {
         setVisiblePlayerIds((prev) => (prev.length ? prev : json.players.map((p) => p.id)));
       }
@@ -217,11 +227,21 @@ export function FatherdleApp({
     }
     // customKey keeps custom dates out of the dependencies unless that range is actually selected
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset, customKey, viewedPlayerId, selectedGameSlug, gameDate, feedLimit]);
+  }, [preset, customKey, viewedPlayerId, selectedGameSlug, gameDate, feedLimit, feedDate]);
 
   useEffect(() => {
     fetchLeagueData();
   }, [fetchLeagueData]);
+
+  // Keep the selected game or player visible in the phone strips
+  useEffect(() => {
+    const t = setTimeout(() => {
+      document.querySelectorAll('[data-strip-active="true"]').forEach((el) =>
+        el.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" })
+      );
+    }, 50);
+    return () => clearTimeout(t);
+  }, [selectedGameSlug, viewedPlayerId, activeTab, data?.todayDate]);
 
   // Is this browser logged in as admin?
   useEffect(() => {
@@ -419,54 +439,85 @@ export function FatherdleApp({
     );
   }
 
-  // Period Selector Component shared by Statistics, Player, and Game pages
-  const renderPeriodSelector = () => (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="bg-surface border border-line/60 rounded-full p-1 flex items-center gap-1 overflow-x-auto">
-        {(
-          [
-            { id: "today", label: "Today" },
-            { id: "week", label: "This week" },
-            { id: "month", label: "This month" },
-            { id: "all", label: "All time" },
-            { id: "custom", label: "Custom range" },
-          ] as Array<{ id: PeriodPreset; label: string }>
-        ).map((item) => {
-          const active = preset === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setPreset(item.id)}
-              className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-colors ${
-                active
-                  ? "bg-text text-[#121212]"
-                  : "text-muted hover:text-text"
-              }`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
+  // Time-range control shared by Statistics, Games and Players (HANDOVER §3). `onLight` is the
+  // variant used on a coloured hero: translucent track, dark selected segment.
+  const renderPeriodSelector = (onLight = false) => (
+    <div className="flex flex-col gap-2 items-start min-w-0 max-w-full">
+      <div className="flex items-center gap-1.5 max-w-full">
+        <div
+          className={`rounded-full p-1 flex items-center gap-0.5 overflow-x-auto no-scrollbar ${
+            onLight ? "bg-black/10" : "bg-surface"
+          }`}
+        >
+          {(
+            [
+              { id: "today", label: "Today" },
+              { id: "week", label: "This week" },
+              { id: "month", label: "This month" },
+              { id: "all", label: "All time" },
+            ] as Array<{ id: PeriodPreset; label: string }>
+          ).map((item) => {
+            const active = preset === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setPreset(item.id)}
+                className={`px-2 sm:px-3 md:px-4 py-1.5 md:py-2 rounded-full text-[11.5px] sm:text-[12px] md:text-[13px] font-semibold whitespace-nowrap transition-colors duration-200 ${
+                  active
+                    ? onLight
+                      ? "bg-[#121212] text-text"
+                      : "bg-text text-[#121212]"
+                    : onLight
+                    ? "text-[#121212]/75 hover:text-[#121212]"
+                    : "text-muted hover:text-text"
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          aria-label="Custom range"
+          onClick={() => setPreset("custom")}
+          className={`shrink-0 h-9 md:h-10 rounded-full border-[1.5px] inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold w-9 md:w-auto md:px-4 transition-colors ${
+            preset === "custom"
+              ? onLight
+                ? "bg-[#121212] text-text border-[#121212]"
+                : "bg-text text-[#121212] border-text"
+              : onLight
+              ? "border-[#121212]/40 text-[#121212]"
+              : "border-line text-muted hover:text-text"
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          <span className="hidden md:inline whitespace-nowrap">Custom range</span>
+        </button>
       </div>
 
       {preset === "custom" && (
-        <div className="flex items-center gap-2 bg-surface border border-line/60 rounded-full px-3 py-1 text-xs">
+        <div
+          className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ${
+            onLight ? "bg-black/10 text-[#121212]" : "bg-surface text-text"
+          }`}
+        >
           <input
             type="date"
             value={customStart}
             max={customEnd}
             onChange={(e) => setCustomStart(e.target.value)}
-            className="bg-transparent text-text font-semibold focus:outline-none"
+            className="bg-transparent font-semibold focus:outline-none"
           />
-          <span className="text-muted">to</span>
+          <span className="opacity-60">to</span>
           <input
             type="date"
             value={customEnd}
             min={customStart}
             max={data.todayDate}
             onChange={(e) => setCustomEnd(e.target.value)}
-            className="bg-transparent text-text font-semibold focus:outline-none"
+            className="bg-transparent font-semibold focus:outline-none"
           />
         </div>
       )}
@@ -474,25 +525,21 @@ export function FatherdleApp({
   );
 
   return (
-    <div className="min-h-screen bg-bg text-text pb-36 md:pb-16">
-      {/* DESKTOP & MOBILE TOP NAV */}
-      <header className="sticky top-0 z-30 bg-bg border-b border-line/50">
-        <div className="max-w-[1440px] mx-auto px-5 md:px-12 h-[68px] md:h-[80px] flex items-center justify-between gap-4">
-          {/* Wordmark */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setActiveTab("statistics")}
-              className="flex items-center gap-2.5 text-left group"
-            >
-              <span className="w-3.5 h-3.5 rounded-full bg-lime group-hover:scale-110 transition-transform" />
-              <span className="text-[12px] font-extrabold tracking-[0.16em] text-text">
-                {APP_WORDMARK}
-              </span>
-            </button>
-          </div>
+    <div className="min-h-screen bg-bg text-text pb-[110px] md:pb-16">
+      {/* TOP BAR: desktop = wordmark, five tabs, Join + Paste; phone = wordmark + Paste */}
+      <header className="sticky top-0 z-30 bg-bg md:border-b md:border-line/60">
+        <div className="max-w-[1440px] mx-auto px-5 md:px-12 h-[64px] md:h-[80px] flex items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab("today")}
+            className="flex items-center gap-2.5 text-left group min-w-0"
+          >
+            <span className="w-3.5 h-3.5 md:w-4 md:h-4 rounded-full bg-lime group-hover:scale-110 transition-transform shrink-0" />
+            <span className="text-[12px] md:text-[14px] font-bold tracking-[0.14em] text-lime md:text-text truncate">
+              {APP_WORDMARK}
+            </span>
+          </button>
 
-          {/* Center Tabs (Desktop) */}
           <nav className="hidden md:flex items-center gap-9">
             {(
               [
@@ -506,9 +553,12 @@ export function FatherdleApp({
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setActiveTab(t.id)}
+                onClick={() => {
+                  if (t.id === "players" && !viewedPlayerId) setViewedPlayerId(currentUserId);
+                  setActiveTab(t.id);
+                }}
                 data-active={activeTab === t.id}
-                className={`nav-tab text-[14px] font-semibold ${
+                className={`nav-tab text-[15px] font-semibold ${
                   activeTab === t.id ? "text-text" : "text-muted hover:text-text"
                 }`}
               >
@@ -517,18 +567,29 @@ export function FatherdleApp({
             ))}
           </nav>
 
-          {/* Right Actions */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
+            {showAdminLink && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("admin")}
+                className={`hidden md:inline-flex px-3.5 py-2 rounded-full text-[13px] font-semibold ${
+                  activeTab === "admin" ? "text-lime" : "text-muted hover:text-text"
+                }`}
+              >
+                Admin
+              </button>
+            )}
             {hasJoined ? (
-              <div className="flex items-center gap-1.5 bg-surface border border-line/70 rounded-full pl-2 pr-3 py-1">
+              <label className="relative btn-secondary flex items-center gap-2 rounded-full md:border-[1.5px] md:border-line md:pl-1.5 md:pr-4 md:h-12 cursor-pointer">
                 <span
                   style={{ backgroundColor: currentUserPlayer?.color || "#FF8A3D" }}
-                  className="w-5 h-5 rounded-full text-[#121212] text-[11px] font-extrabold flex items-center justify-center"
+                  className="w-9 h-9 rounded-full text-[#121212] text-[14px] font-bold flex items-center justify-center"
                 >
                   {currentUserPlayer?.avatarInitials}
                 </span>
+                <span className="hidden md:inline text-[14px] font-semibold">{currentUserPlayer?.name}</span>
                 <select
-                  aria-label="Current player identity"
+                  aria-label="Who are you?"
                   value={currentUserId}
                   onChange={(e) => {
                     if (e.target.value === "__add") {
@@ -537,52 +598,34 @@ export function FatherdleApp({
                     }
                     chooseIdentity(e.target.value);
                   }}
-                  className="bg-transparent text-[12px] font-bold text-text focus:outline-none cursor-pointer"
+                  className="absolute inset-0 opacity-0 cursor-pointer"
                 >
                   {data.players.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-surface text-text">
-                      {p.name} (you)
+                    <option key={p.id} value={p.id}>
+                      {p.name}
                     </option>
                   ))}
-                  {isAdmin && (
-                    <option value="__add" className="bg-surface text-text">
-                      + Add player…
-                    </option>
-                  )}
+                  {isAdmin && <option value="__add">+ Add player…</option>}
                 </select>
-              </div>
+              </label>
             ) : (
               <button
                 type="button"
                 onClick={() => openJoin("both")}
-                className="btn-secondary flex items-center gap-1.5 px-3.5 md:px-5 py-2 md:py-2.5 whitespace-nowrap rounded-full border border-line text-[13px] font-semibold text-text"
+                className="btn-secondary hidden md:flex items-center gap-2 px-5 h-12 rounded-full border-[1.5px] border-line text-[15px] font-semibold text-text whitespace-nowrap"
               >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span><span className="md:hidden">Join</span><span className="hidden md:inline">Join the league</span></span>
-              </button>
-            )}
-
-            {showAdminLink && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("admin")}
-                className={`px-3.5 py-2 rounded-full border text-[12px] font-bold ${
-                  activeTab === "admin"
-                    ? "border-lime text-lime"
-                    : "border-line text-muted hover:text-text hover:bg-surface"
-                }`}
-              >
-                Admin
+                <UserPlus className="w-4 h-4" />
+                <span>Join the league</span>
               </button>
             )}
 
             <button
               type="button"
-              onClick={() => setIsPasteOpen(true)}
-              className="btn-primary wobble-twice hidden md:flex items-center gap-2 px-5 py-2.5 rounded-full bg-lime text-[#121212] text-[13px] font-bold"
+              onClick={() => (hasJoined ? setIsPasteOpen(true) : openJoin("both"))}
+              className="btn-primary wobble-twice flex items-center gap-2 px-4 md:px-7 h-10 md:h-12 rounded-full bg-lime text-[#121212] text-[13px] md:text-[16px] font-bold whitespace-nowrap"
             >
-              <ClipboardPaste className="w-3.5 h-3.5" />
-              <span>Paste result</span>
+              <ClipboardPaste className="w-4 h-4 md:w-5 md:h-5" />
+              <span>{hasJoined ? "Paste result" : <><span className="md:hidden">Join</span><span className="hidden md:inline">Paste result</span></>}</span>
             </button>
           </div>
         </div>
@@ -680,15 +723,20 @@ export function FatherdleApp({
         )}
 
         {activeTab === "feed" && (
-          <FeedView
+          <FeedPage
             items={data.feed.items}
+            days={data.feed.days}
+            selectedDay={feedDate}
+            onSelectDay={setFeedDate}
+            lastUpdated={lastUpdated}
+            countedLabel={`${data.today.games.filter((g) => g.status === "Qualified").length} of ${data.today.games.length} counted`}
             hasMore={data.feed.hasMore}
             viewerId={hasJoined ? currentUserId : ""}
             geoguessrPlayed={data.feed.geoguessrPlayed}
             onMore={() => setFeedLimit((n) => n + 40)}
             filter={feedFilter}
             onFilter={setFeedFilter}
-            games={data.games.map((g) => ({ slug: g.slug, name: g.name, color: g.color }))}
+            games={data.games.map((g) => ({ slug: g.slug, name: g.name }))}
             todayDate={data.todayDate}
             todayStandings={data.today.standings}
             onPaste={() => setIsPasteOpen(true)}
@@ -1999,7 +2047,7 @@ export function FatherdleApp({
               </div>
             </div>
 
-            <PlayerGameGrid strengths={data.playerPage.strengths} gameStats={data.playerPage.gameStats} />
+            <PlayerGameGrid strengths={data.playerPage.strengths} gameStats={data.playerPage.gameStats} playerName={data.playerPage.player.name} accent={data.playerPage.player.color} />
             </div>
             </div>
           </div>
@@ -2009,34 +2057,42 @@ export function FatherdleApp({
             5. INDIVIDUAL GAME PAGE (Screens 6 & 8)
            ========================================================= */}
         {activeTab === "games" && (
-          <div className="space-y-7">
-            <h1 className="text-[40px] md:text-[56px] font-bold tracking-[-1.5px] leading-none">Games</h1>
+          <div className="space-y-6">
+            <h1 className="lg:hidden text-[44px] font-bold tracking-[-1.5px] leading-none">Games</h1>
 
-            <div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-6 lg:items-start space-y-7 lg:space-y-0">
-            {/* Rail (desktop) */}
-            <aside className="hidden lg:block bg-surface rounded-[24px] p-3 space-y-1 sticky top-[96px] max-h-[calc(100vh-120px)] overflow-y-auto">
+            <div className="lg:grid lg:grid-cols-[288px_minmax(0,1fr)] lg:gap-8 lg:items-start space-y-5 lg:space-y-0">
+            {/* Rail (desktop): every game with today's leader */}
+            <aside className="hidden lg:block sticky top-[100px] max-h-[calc(100vh-120px)] overflow-y-auto no-scrollbar p-1 -m-1">
+              <div className="px-3 pb-2 text-[11px] font-bold tracking-[1.6px] uppercase text-muted">
+                {data.games.length} games
+              </div>
               {data.games.map((g) => {
                 const active = g.slug === selectedGameSlug;
+                const today = data.today.games.find((x) => x.gameSlug === g.slug);
+                const lead = today?.rankings[0];
                 return (
                   <button
                     key={g.slug}
                     type="button"
                     onClick={() => setSelectedGameSlug(g.slug)}
-                    className={`rail-item w-full flex items-center gap-3 px-3 py-2.5 rounded-[14px] text-left ${
+                    className={`rail-item w-full flex items-center gap-3 px-3 py-2 rounded-[14px] text-left ${
                       active ? "bg-surface2 outline outline-1 outline-lime" : ""
                     }`}
                   >
                     <GameIcon slug={g.slug} size={36} />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[14px] font-semibold truncate">{g.name}</span>
-                      <span className="block text-[12px] text-muted truncate">{g.unit}</span>
+                      <span className="block text-[15px] font-semibold truncate">{g.name}</span>
+                      <span className="block text-[12px] text-muted truncate">
+                        Lead · {lead ? `${lead.playerName} ${lead.displayResult}` : "—"}
+                      </span>
                     </span>
+                    {active && <ChevronRight className="w-4 h-4 text-lime shrink-0" />}
                   </button>
                 );
               })}
             </aside>
             {/* Icon strip (phone) */}
-            <div className="lg:hidden flex items-center gap-3 overflow-x-auto pb-1 -mx-5 px-5">
+            <div className="lg:hidden flex items-start gap-1 overflow-x-auto no-scrollbar -mx-5 px-5 py-1">
               {data.games.map((g) => {
                 const active = g.slug === selectedGameSlug;
                 return (
@@ -2044,100 +2100,111 @@ export function FatherdleApp({
                     key={g.slug}
                     type="button"
                     onClick={() => setSelectedGameSlug(g.slug)}
-                    className={`shrink-0 p-1 rounded-[16px] ${active ? "outline outline-1 outline-lime bg-surface2" : ""}`}
+                    data-strip-active={active}
+                    className={`shrink-0 w-[76px] py-2 rounded-[16px] flex flex-col items-center gap-1.5 ${
+                      active ? "outline outline-1 outline-lime bg-surface2" : ""
+                    }`}
                     aria-label={g.name}
                   >
-                    <GameIcon slug={g.slug} size={44} />
+                    <GameIcon slug={g.slug} size={48} />
+                    <span className={`text-[11px] w-full px-1 truncate text-center ${active ? "text-text" : "text-muted"}`}>
+                      {g.name}
+                    </span>
                   </button>
                 );
               })}
             </div>
-            <div className="space-y-7 min-w-0">
+            <div className="space-y-6 min-w-0">
 
-            {/* Period for the history, distribution and player stats below */}
-            {renderPeriodSelector()}
-
-            {/* Game Coloured Hero Card (5.1) */}
-            <div
-              style={{ background: gameGradient(data.gamePage.game.slug, 120), color: GAME_ICON[data.gamePage.game.slug]?.fg ?? "#121212" }}
-              className="rounded-[24px] p-6 sm:p-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6"
-            >
-              <div className="space-y-2 min-w-0 flex-1">
-                <h1 className={`font-bold leading-none tracking-[-1.5px] break-words ${data.gamePage.game.name.length > 14 ? "text-[30px] sm:text-[40px] lg:text-[48px]" : "text-[44px] sm:text-[56px]"}`}>
-                  {data.gamePage.game.name}
-                </h1>
-                <p className="text-[15px] font-semibold max-w-xl">
-                  {data.gamePage.game.description}
-                </p>
-                <div className="pt-1">
-                  <a
-                    href={data.gamePage.game.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-primary inline-flex items-center gap-1.5 text-[13px] font-bold px-4 py-2 rounded-full bg-[#121212] text-text"
-                  >
-                    <span>Play {data.gamePage.game.name}</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:items-end gap-2 shrink-0">
-                <div className="flex flex-wrap sm:justify-end gap-2">
-                  <span className="px-3.5 py-1.5 rounded-full bg-black/15 text-[12px] font-extrabold whitespace-nowrap">
-                    {data.gamePage.todayStanding.submissionCount} of{" "}
-                    {data.gamePage.todayStanding.totalPlayers} submitted
-                  </span>
-                  <span className="px-3.5 py-1.5 rounded-full bg-[#121212] text-lime text-[12px] font-extrabold whitespace-nowrap">
-                    {data.gamePage.todayStanding.status === "Qualified"
-                      ? `Qualified: counts towards ${gameDate && gameDate !== data.todayDate ? "that day's" : "today's"} league`
-                      : data.gamePage.todayStanding.status === "Pending"
-                      ? `Pending: needs ${data.gamePage.todayStanding.requiredCount} submissions`
-                      : "Excluded from league points"}
-                  </span>
-                </div>
-                <span className="px-3.5 py-1 rounded-full bg-black/10 text-[11px] font-bold whitespace-nowrap self-start sm:self-end">
-                  {data.gamePage.todayStanding.isFinalised
-                    ? "Results are final"
-                    : "Provisional until midnight"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShareModalMode("game")}
-                  className="btn-primary mt-1 px-4 py-2.5 rounded-full bg-[#121212] text-text text-[13px] font-bold inline-flex items-center gap-2 whitespace-nowrap self-start sm:self-end"
+            {/* Hero in the game's colours: name, Play, time range, KPIs */}
+            {(() => {
+              const g = data.gamePage.game;
+              const fg = GAME_ICON[g.slug]?.fg ?? "#121212";
+              const kpis = [
+                { label: "results posted", value: String(data.gamePage.stats.results) },
+                ...data.gamePage.stats.kpis,
+              ].slice(0, 4);
+              return (
+                <div
+                  style={{ background: gameGradient(g.slug, 135), color: fg }}
+                  className="rounded-[24px] p-5 md:p-9 space-y-5 md:space-y-7"
                 >
-                  <Share2 className="w-4 h-4" />
-                  <span>Share this game</span>
-                </button>
-              </div>
-            </div>
-
-            <GameStatsView slug={data.gamePage.game.slug} stats={data.gamePage.stats} />
-
-            {/* Game Specific Callouts */}
-            {data.gamePage.visualisation.callouts.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {data.gamePage.visualisation.callouts.map((c) => (
-                  <div
-                    key={c.label}
-                    className="bg-surface border border-line/50 rounded-[18px] p-5 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-wider text-muted">
-                        {c.label}
-                      </div>
-                      <div className="text-[12px] text-muted mt-1">{c.subtext}</div>
-                    </div>
-                    <div
-                      style={{ color: data.gamePage.game.color }}
-                      className="font-serif text-[36px] leading-none"
+                  <div className="flex items-start justify-between gap-3">
+                    <h2
+                      className={`font-bold leading-[0.95] tracking-[-2px] break-words min-w-0 ${
+                        g.name.length > 14 ? "text-[30px] md:text-[56px]" : "text-[40px] md:text-[88px]"
+                      }`}
                     >
-                      {c.value}
-                    </div>
+                      {g.name}
+                    </h2>
+                    <a
+                      href={g.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="md:hidden btn-primary shrink-0 inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#121212] text-text text-[14px] font-semibold"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      Play
+                    </a>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <a
+                      href={g.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hidden md:inline-flex btn-primary items-center gap-2.5 h-12 px-6 rounded-full bg-[#121212] text-text text-[15px] font-semibold"
+                    >
+                      <Play className="w-4 h-4" />
+                      Play {g.name.length > 14 ? "" : g.name}
+                      <ArrowUpRight className="w-4 h-4" />
+                    </a>
+                    <div className="max-w-full">{renderPeriodSelector(fg === "#121212")}</div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 border-t border-current/30" style={{ borderColor: fg === "#121212" ? "rgba(18,18,18,0.35)" : "rgba(255,255,255,0.4)" }}>
+                    {kpis.map((k, i) => (
+                      <div
+                        key={k.label}
+                        className={`pt-4 md:pt-5 pb-1 ${i % 2 === 1 ? "pl-4 md:pl-6" : "md:pl-6"} ${i === 0 ? "md:pl-0" : ""} ${
+                          i > 0 ? "md:border-l" : ""
+                        } ${i >= 2 ? "border-t md:border-t-0" : ""}`}
+                        style={{ borderColor: fg === "#121212" ? "rgba(18,18,18,0.35)" : "rgba(255,255,255,0.4)" }}
+                      >
+                        <div className="font-serif text-[40px] md:text-[56px] leading-none tracking-[-1px]">
+                          <span className="stat-num">{k.value}</span>
+                        </div>
+                        <div className="text-[12px] md:text-[13px] mt-1 opacity-80">{k.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[12px] font-semibold">
+                    <span className="px-3 py-1 rounded-full bg-black/15">
+                      Today {data.gamePage.todayStanding.submissionCount} of {data.gamePage.todayStanding.totalPlayers}
+                    </span>
+                    <span className="px-3 py-1 rounded-full bg-black/15">
+                      {data.gamePage.todayStanding.status === "Qualified"
+                        ? "Counts today"
+                        : data.gamePage.todayStanding.status === "Pending"
+                        ? `Pending: needs ${data.gamePage.todayStanding.requiredCount}`
+                        : "Excluded"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShareModalMode("game")}
+                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#121212] text-text"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      Share
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <GameStatsView
+              slug={data.gamePage.game.slug}
+              stats={data.gamePage.stats}
+              today={data.gamePage.todayStanding}
+            />
 
             {/* Row 1: Today's Results (5.2 & 5.3) + Game History (5.4) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -2317,52 +2384,8 @@ export function FatherdleApp({
 
             {/* Row 2: Score Distribution Histogram (5.5) + Per-Player Table */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Distribution Histogram */}
-              <div className="lg:col-span-6 bg-surface border border-line/50 rounded-[22px] p-6 flex flex-col justify-between space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    {data.gamePage.visualisation.distributionTitle}
-                  </h2>
-                  <span className="text-xs text-muted">
-                    {data.gamePage.visualisation.distributionSubtitle}
-                  </span>
-                </div>
-
-                <div className="h-[190px] flex items-end justify-between gap-3 pt-6">
-                  {(() => {
-                    const buckets = data.gamePage.visualisation.distributionBuckets;
-                    const maxCount = Math.max(1, ...buckets.map((b) => b.count));
-                    return buckets.map((b) => {
-                      const hPct = Math.max(12, (b.count / maxCount) * 100);
-                      return (
-                        <div
-                          key={b.label}
-                          className="flex-1 flex flex-col items-center h-full justify-end"
-                        >
-                          <span className="text-[13px] font-extrabold text-text mb-1.5 tabular-nums">
-                            {b.count}
-                          </span>
-                          <div
-                            style={{
-                              height: `${hPct}%`,
-                              backgroundColor: b.isPeak
-                                ? data.gamePage.game.color
-                                : "rgba(184, 121, 79, 0.45)",
-                            }}
-                            className="w-full rounded-[8px] transition-all"
-                          />
-                          <span className="text-[11px] text-muted mt-2 text-center truncate w-full">
-                            {b.label}
-                          </span>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
-
               {/* Players Table in this Game */}
-              <div className="lg:col-span-6 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
+              <div className="lg:col-span-12 bg-surface rounded-[22px] p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-[19px] font-bold tracking-tight">
                     Players
@@ -2419,46 +2442,35 @@ export function FatherdleApp({
         )}
       </main>
 
-      {/* PERSISTENT MOBILE DOCK (60px Lime "Paste result" pill + 4-tab bar) */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-bg via-bg/95 to-transparent pt-3 pb-3 px-5 space-y-2.5">
-        <button
-          type="button"
-          onClick={() => setIsPasteOpen(true)}
-          className="btn-primary w-full h-[52px] rounded-full bg-lime text-[#121212] text-[15px] font-bold flex items-center justify-center gap-2 shadow-lg"
-        >
-          <ClipboardPaste className="w-4 h-4" />
-          <span>Paste result</span>
-        </button>
-
-        <nav className="bg-surface border border-line/80 rounded-full p-1 grid grid-cols-5 gap-1">
-          {[
-            { id: "today" as NavTab, label: "League", icon: Trophy },
-            { id: "feed" as NavTab, label: "Feed", icon: Activity },
-            { id: "statistics" as NavTab, label: "Stats", icon: BarChart3 },
-            { id: "games" as NavTab, label: "Games", icon: Gamepad2 },
-            { id: "players" as NavTab, label: "Me", icon: Users },
-          ].map((item) => {
-            const Icon = item.icon;
-            const active = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (item.id === "players") setViewedPlayerId(currentUserId);
-                  setActiveTab(item.id);
-                }}
-                className={`py-2 rounded-full flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold transition-colors ${
-                  active ? "bg-lime text-[#121212]" : "text-muted hover:text-text"
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      {/* PHONE DOCK: five equal tabs, icon over label, selected tab filled lime */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#1A1A19] border-t border-line/50 px-3 pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))] grid grid-cols-5 gap-1.5">
+        {[
+          { id: "today" as NavTab, label: "League", icon: Trophy },
+          { id: "feed" as NavTab, label: "Feed", icon: List },
+          { id: "statistics" as NavTab, label: "Stats", icon: BarChart3 },
+          { id: "games" as NavTab, label: "Games", icon: Gamepad2 },
+          { id: "players" as NavTab, label: "Players", icon: Users },
+        ].map((item) => {
+          const Icon = item.icon;
+          const active = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                if (item.id === "players" && !viewedPlayerId) setViewedPlayerId(currentUserId);
+                setActiveTab(item.id);
+              }}
+              className={`h-[52px] rounded-[16px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors duration-200 ${
+                active ? "bg-lime text-[#121212]" : "text-muted active:text-text"
+              }`}
+            >
+              <Icon className="w-5 h-5" strokeWidth={1.75} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* MULTI-GAME PASTE MODAL */}
       <PasteResultModal

@@ -21,7 +21,7 @@ import {
   calculateTimeSeries,
 } from "@/lib/analytics/engine";
 import { generateAutomaticInsights } from "@/lib/analytics/insights";
-import { buildFeed, buildLeagues } from "@/lib/analytics/feed";
+import { buildFeed, buildFeedDays, buildLeagues } from "@/lib/analytics/feed";
 import { buildGameStats } from "@/lib/analytics/game-stats";
 import { buildGroupStats } from "@/lib/analytics/group-stats";
 import { createGameAnalyticsModule } from "@/lib/analytics/game-modules";
@@ -163,7 +163,17 @@ export async function GET(req: NextRequest) {
       );
 
     const feedLimit = Math.min(200, Math.max(10, Number(searchParams.get("feedLimit")) || 20));
-    const feed = buildFeed(todayDate, allSubmissions, players, feedLimit);
+    const feedDate = searchParams.get("feedDate") || "";
+    const feed = {
+      ...buildFeed(
+        todayDate,
+        allSubmissions,
+        players,
+        /^\d{4}-\d{2}-\d{2}$/.test(feedDate) ? 500 : feedLimit,
+        /^\d{4}-\d{2}-\d{2}$/.test(feedDate) ? feedDate : undefined
+      ),
+      days: buildFeedDays(todayDate, allSubmissions, players),
+    };
     const leagues = buildLeagues(todayDate, allSubmissions, players);
 
     return NextResponse.json({

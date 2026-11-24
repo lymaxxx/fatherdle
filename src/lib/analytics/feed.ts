@@ -130,6 +130,9 @@ export interface FeedResultItem {
   placement: number | null;
   outOf: number;
   dayBest: number | null;
+  dayBestBy: string | null; // who posted the day's best result in this game
+  points: number; // league points this result earns (0 while the game is pending)
+  counted: boolean;
   grid: string[] | null; // Wordle-style tile rows
   rounds: number[] | null; // MapTap round scores
   detail: Record<string, unknown> | null; // extra stats for GeoGuessr, Flagcognito and Flagments
@@ -183,12 +186,13 @@ export function buildFeed(
   todayDate: string,
   submissions: Submission[],
   players: Player[],
-  limit: number
+  limit: number,
+  onlyDate?: string
 ): { items: FeedItem[]; hasMore: boolean; geoguessrPlayed: Record<string, string[]> } {
   const byId = new Map(players.map((p) => [p.id, p]));
   const indexed = submissions
     .map((s, i) => ({ s, i }))
-    .filter(({ s }) => byId.has(s.playerId))
+    .filter(({ s }) => byId.has(s.playerId) && (!onlyDate || s.leagueDate === onlyDate))
     .sort(
       (a, b) =>
         b.s.leagueDate.localeCompare(a.s.leagueDate) ||
@@ -199,7 +203,10 @@ export function buildFeed(
   const dates = [...new Set(window.map(({ s }) => s.leagueDate))];
 
   // Standings per game for each date shown, for "2nd of 5 so far" and the day's best
-  const placement = new Map<string, { place: number; outOf: number; best: number | null }>();
+  const placement = new Map<
+    string,
+    { place: number; outOf: number; best: number | null; bestBy: string | null; points: number; counted: boolean }
+  >();
   for (const d of dates) {
     for (const g of calculateAllDailyStandings(d, d, submissions, players, todayDate, ACTIVE_GAME_SLUGS)) {
       for (const r of g.rankings) {
@@ -207,6 +214,9 @@ export function buildFeed(
           place: r.placement,
           outOf: g.submissionCount,
           best: g.rankings[0]?.primaryValue ?? null,
+          bestBy: g.rankings[0]?.playerName ?? null,
+          points: r.leaguePoints,
+          counted: g.status === "Qualified",
         });
       }
     }
@@ -230,6 +240,9 @@ export function buildFeed(
       placement: pl?.place ?? null,
       outOf: pl?.outOf ?? 0,
       dayBest: pl?.best ?? null,
+      dayBestBy: pl?.bestBy ?? null,
+      points: pl?.points ?? 0,
+      counted: pl?.counted ?? false,
       grid: ["wordle", "connections", "strands"].includes(s.gameSlug) ? gridFrom(s.rawText) : null,
       rounds: s.gameSlug === "maptap" ? roundsFrom(s.rawText) : null,
       detail: DETAIL_GAMES.includes(s.gameSlug) ? detailFrom(s.metadataJson) : null,
@@ -290,4 +303,40 @@ export function buildFeed(
     hasMore: indexed.length > limit,
     geoguessrPlayed,
   };
+}
+
+
+export interface FeedDay {
+  date: string;
+  count: number;
+  leader: { name: string; color: string; initials: string } | null;
+  leaguePoints: number; // the leader's points that day
+}
+
+/** Every day with at least one result, newest first: result count and who scored most that day. */
+export function buildFeedDays(todayDate: string, submissions: Submission[], players: Player[]): FeedDay[] {
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const counts = new Map<string, number>();
+  for (const s of submissions) if (byId.has(s.playerId)) counts.set(s.leagueDate, (counts.get(s.leagueDate) || 0) + 1);
+  const dates = [...counts.keys()].sort().reverse();
+  if (!dates.length) return [];
+  const standings = calculateAllDailyStandings(dates[dates.length - 1], dates[0], submissions, players, todayDate, ACTIVE_GAME_SLUGS);
+  const pts = new Map<string, Map<string, number>>();
+  for (const g of standings) {
+    const m = pts.get(g.leagueDate) ?? new Map<string, number>();
+    for (const r of g.rankings) m.set(r.playerId, (m.get(r.playerId) || 0) + r.leaguePoints);
+    pts.set(g.leagueDate, m);
+  }
+  return dates.map((date) => {
+    const m = pts.get(date);
+    let best: [string, number] | null = null;
+    if (m) for (const e of m.entries()) if (e[1] > 0 && (!best || e[1] > best[1])) best = e;
+    const p = best ? byId.get(best[0]) : undefined;
+    return {
+      date,
+      count: counts.get(date) || 0,
+      leader: p ? { name: p.name, color: p.color, initials: p.avatarInitials } : null,
+      leaguePoints: best ? best[1] : 0,
+    };
+  });
 }
