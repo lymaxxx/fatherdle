@@ -1711,8 +1711,33 @@ export function FatherdleApp({
            ========================================================= */}
         {activeTab === "players" && data.playerPage.standingRow && (
           <div className="space-y-7">
-            {/* Player Switcher Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-6 lg:items-start space-y-7 lg:space-y-0">
+            <aside className="hidden lg:block bg-surface rounded-[24px] p-3 space-y-1 sticky top-[96px]">
+              {data.players.map((p) => {
+                const active = p.id === data.playerPage.player.id;
+                const row = data.stats.standings.find((r) => r.player.id === p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setViewedPlayerId(p.id)}
+                    className={`rail-item w-full flex items-center gap-3 px-3 py-2.5 rounded-[14px] text-left ${
+                      active ? "bg-surface2 outline outline-1 outline-lime" : ""
+                    }`}
+                  >
+                    <span style={{ backgroundColor: p.color }} className="w-9 h-9 rounded-full text-[#121212] text-[15px] font-bold flex items-center justify-center shrink-0">
+                      {p.avatarInitials}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-semibold truncate">{p.name}</span>
+                      <span className="block text-[12px] text-muted">{row ? `${row.gamesPlayed} games` : "no games"}</span>
+                    </span>
+                    <span className="font-serif text-[26px] leading-none text-text">{row ? row.totalPoints : 0}</span>
+                  </button>
+                );
+              })}
+            </aside>
+            <div className="lg:hidden flex items-center gap-3 overflow-x-auto pb-1 -mx-5 px-5">
               {data.players.map((p) => {
                 const active = p.id === data.playerPage.player.id;
                 return (
@@ -1720,21 +1745,17 @@ export function FatherdleApp({
                     key={p.id}
                     type="button"
                     onClick={() => setViewedPlayerId(p.id)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 border transition-all ${
-                      active
-                        ? "bg-surface2 border-text text-text"
-                        : "bg-surface border-line/50 text-muted hover:text-text"
-                    }`}
+                    aria-label={p.name}
+                    className={`shrink-0 p-1 rounded-full ${active ? "outline outline-1 outline-lime bg-surface2" : ""}`}
                   >
-                    <span
-                      style={{ backgroundColor: p.color }}
-                      className="w-2.5 h-2.5 rounded-full"
-                    />
-                    <span>{p.name}</span>
+                    <span style={{ backgroundColor: p.color }} className="w-11 h-11 rounded-full text-[#121212] text-[16px] font-bold flex items-center justify-center">
+                      {p.avatarInitials}
+                    </span>
                   </button>
                 );
               })}
             </div>
+            <div className="space-y-7 min-w-0">
 
             {/* Player Header + Period Selector */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1746,7 +1767,7 @@ export function FatherdleApp({
                   {data.playerPage.player.avatarInitials}
                 </div>
                 <div>
-                  <h1 className="text-[44px] sm:text-[52px] font-extrabold tracking-[-1.8px] leading-none">
+                  <h1 className="text-[44px] sm:text-[56px] font-bold tracking-[-1.5px] leading-none">
                     {data.playerPage.player.name}
                   </h1>
                   <p className="text-[13px] text-muted mt-1">
@@ -1974,6 +1995,8 @@ export function FatherdleApp({
                   })}
                 </div>
               </div>
+            </div>
+            </div>
             </div>
           </div>
         )}
