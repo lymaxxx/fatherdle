@@ -1078,121 +1078,119 @@ export function FatherdleApp({
                 ) : (
                   <>
                 {todayView === "today" && banner}
+                <div className="grid grid-cols-[minmax(0,1fr)_484px] gap-6 items-start">
+                <div className="space-y-4 min-w-0">
                 <div className="space-y-2.5">
-                  {standings.map((row) => {
+                  {standings.map((row, idx) => {
                     const isMe = row.player.id === currentUserId;
                     const played = row.gamesPlayed > 0;
-                    const pct = played ? Math.max(28.6, (row.totalPoints / maxPts) * 100) : 28.6;
+                    const pct = played ? Math.max(30, (row.totalPoints / maxPts) * 100) : 30;
                     return (
-                      <div key={row.player.id} className="flex items-center gap-6 h-[104px]">
+                      <div key={row.player.id} className="bar-row flex items-center gap-4 h-[72px]">
                         <span
-                          className={`font-serif text-[96px] leading-[96px] w-20 shrink-0 ${
-                            row.rank === 1 && played ? "text-lime" : "text-text"
+                          className={`font-serif text-[40px] leading-none w-10 shrink-0 ${
+                            row.rank === 1 && played ? "text-lime" : "text-muted"
                           }`}
                         >
                           {row.rank}
                         </span>
-                        <div className="flex-1 relative h-[104px]">
+                        <div className="flex-1 relative h-[72px]">
                           <button
                             type="button"
                             onClick={() => openPlayer(row.player.id)}
                             style={{
                               width: `${pct}%`,
+                              animationDelay: `${idx * 60}ms`,
                               ...(played ? { backgroundColor: row.player.color } : {}),
                             }}
-                            className={`absolute left-0 top-0 h-[104px] rounded-2xl text-left px-7 ${
-                              played
-                                ? "text-[#121212]"
-                                : "text-muted border-2 border-line bg-transparent"
+                            className={`bar-fill grow-in absolute left-0 top-0 h-[72px] rounded-2xl text-left px-6 flex flex-col justify-center ${
+                              played ? "text-[#121212]" : "text-muted bg-surface"
                             }`}
                           >
-                            <div className="text-[38px] font-extrabold tracking-[-1px] leading-[42px] mt-[18px]">
+                            <div className="text-[22px] font-bold tracking-[-0.3px] leading-tight truncate">
                               {row.player.name}
+                              {isMe ? " (you)" : ""}
                             </div>
-                            <div
-                              className={`text-[16px] font-medium ${played ? "opacity-70" : ""}`}
-                            >
+                            <div className={`text-[13px] font-medium ${played ? "opacity-70" : ""}`}>
                               {submittedLabel(row)}
                             </div>
                           </button>
-                          {isMe && played && (
-                            <span
-                              style={{ left: `calc(${pct}% - 84px)` }}
-                              className="absolute top-[38px] h-[30px] px-3.5 rounded-[15px] bg-[#121212] text-text text-[14px] font-extrabold inline-flex items-center"
-                            >
-                              You
-                            </span>
-                          )}
                         </div>
-                        <span className="font-serif text-[104px] leading-[104px] w-[150px] text-right tabular-nums shrink-0">
-                          {played ? row.totalPoints : <span className="text-muted">–</span>}
+                        <span className="bar-score font-serif text-[48px] leading-none w-[96px] text-right tabular-nums shrink-0">
+                          {played ? <CountUp value={row.totalPoints} /> : <span className="text-muted">–</span>}
                         </span>
                       </div>
                     );
                   })}
                 </div>
 
-                <div className="bg-surface2 rounded-[14px] px-4 py-3 flex items-center gap-2.5 text-[13px] text-muted">
+                <div className="bg-surface rounded-[14px] px-4 py-3 flex items-center gap-2.5 text-[13px] text-muted">
                   <Info className="w-4 h-4 shrink-0" />
                   <span>
                     How points work: points come from your place in each qualified game. Players
                     with the same result share a place.
                   </span>
                 </div>
-
-                {weekView ? weekTiles : (
-                <div className="space-y-3">
-                  <div className="flex items-baseline gap-3">
-                    <h2 className="text-[28px] font-extrabold">Games</h2>
-                    <span className="text-[14px] text-muted">
-                      Lit up = submitted · grey = waiting
-                    </span>
+                </div>
+                {weekView ? <div className="min-w-0">{weekTiles}</div> : (
+                <div className="bg-surface rounded-[24px] p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[20px] font-bold">Games today</h2>
+                    <span className="text-[12px] text-muted">{data.today.games.filter((g) => g.submissionCount > 0).length} of {data.today.games.length} played</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-3.5">
-                    {data.today.games.map((dg) => {
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {data.today.games.filter((dg) => dg.submissionCount > 0).map((dg) => {
                       const g = GAMES[dg.gameSlug];
-                      const needs = Math.max(0, dg.requiredCount - dg.submissionCount);
+                      const done = data.players.filter((p) => dg.rankings.some((r) => r.playerId === p.id));
                       return (
                         <button
                           key={dg.gameSlug}
                           type="button"
                           onClick={() => openGame(g.slug)}
-                          className="bg-surface rounded-[18px] p-5 text-left space-y-2.5 hover:bg-surface2/60 transition-colors"
+                          className="game-tile bg-surface2 rounded-[16px] p-3.5 text-left space-y-2.5"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span
-                                style={{ backgroundColor: g.color }}
-                                className="w-1.5 h-6 rounded-[3px] shrink-0"
-                              />
-                              <span className="text-[22px] font-extrabold truncate">{g.name}</span>
+                          <div className="flex items-center gap-2.5">
+                            <GameIcon slug={g.slug} size={32} />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[14px] font-semibold truncate">{g.name}</div>
+                              <div className="text-[12px] text-muted">
+                                {dg.submissionCount}/{dg.totalPlayers}
+                                {dg.status === "Pending" ? " · pending" : ""}
+                              </div>
                             </div>
-                            {statusChip(dg.status)}
                           </div>
-                          <div className="text-[14px] text-muted">
-                            {dg.submissionCount} of {dg.totalPlayers} submitted
-                            {dg.status === "Pending" && needs > 0 ? ` · ${needs} more needed` : ""}
+                          <div className="flex flex-wrap gap-1">
+                            {done.slice(0, 3).map((p) => (
+                              <span key={p.id} style={{ backgroundColor: p.color }} className="rounded-full px-2 py-[2px] text-[11px] font-bold text-[#121212]">
+                                {p.name}
+                              </span>
+                            ))}
+                            {done.length > 3 && (
+                              <span className="rounded-full px-2 py-[2px] text-[11px] font-bold text-muted border border-line">+{done.length - 3}</span>
+                            )}
                           </div>
-                          <div className="flex flex-wrap gap-1.5">{playerChips(dg, "md")}</div>
                         </button>
                       );
                     })}
-                    <div className="bg-surface rounded-[18px] p-5 flex items-start gap-3 text-[14px]">
-                      <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold text-text">Qualified and Pending</div>
-                        <p className="text-muted mt-0.5">
-                          A game counts towards the league once at least half of the players who
-                          played that day have submitted it
-                          {active > 0 ? ` (${required} of ${active} right now)` : ""}. Until then it is
-                          Pending and awards no points. Players who haven&apos;t played anything that day
-                          don&apos;t count towards the half.
-                        </p>
-                      </div>
-                    </div>
                   </div>
+                  {data.today.games.some((dg) => dg.submissionCount === 0) && (
+                    <div className="rounded-[14px] bg-bg/50 px-3.5 py-3 text-[12px] text-muted">
+                      <span className="font-semibold text-text">Not played yet: </span>
+                      {data.today.games.filter((dg) => dg.submissionCount === 0).map((dg) => GAMES[dg.gameSlug].name).join(", ")}
+                    </div>
+                  )}
+                  <div className="text-[12px] text-muted leading-4">{pendingNote}</div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPasteOpen(true)}
+                    className="btn-primary w-full h-12 rounded-full bg-lime text-[#121212] text-[14px] font-bold inline-flex items-center justify-center gap-2"
+                  >
+                    <ClipboardPaste className="w-4 h-4" />
+                    Paste result
+                  </button>
                 </div>
                 )}
+                </div>
                   </>
                 )}
               </div>
