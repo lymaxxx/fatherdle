@@ -198,6 +198,32 @@ export async function GET(req: NextRequest) {
         player: targetPlayer,
         standingRow: standings.find((r) => r.player.id === targetPlayer.id) || null,
         strengths: playerProfile.strengths,
+        extra: (() => {
+          // Streak: consecutive calendar days with a result, ending today (or yesterday if today is still open)
+          const mine = new Set(allSubmissions.filter((x) => x.playerId === targetPlayer.id).map((x) => x.leagueDate));
+          let day = mine.has(todayDate) ? todayDate : addDays(todayDate, -1);
+          let streak = 0;
+          while (mine.has(day)) {
+            streak++;
+            day = addDays(day, -1);
+          }
+          // Submission rate: results posted over games anyone played on the days in the period
+          const inPeriod = allSubmissions.filter((x) => x.leagueDate >= period.startDate && x.leagueDate <= period.endDate);
+          const gamesByDay = new Map<string, Set<string>>();
+          for (const x of inPeriod) {
+            const g = gamesByDay.get(x.leagueDate) ?? new Set<string>();
+            g.add(x.gameSlug);
+            gamesByDay.set(x.leagueDate, g);
+          }
+          let possible = 0;
+          for (const g of gamesByDay.values()) possible += g.size;
+          const posted = inPeriod.filter((x) => x.playerId === targetPlayer.id).length;
+          const joined = new Date(`${targetPlayer.joinedAt}T12:00:00Z`).getTime();
+          const weeksIn = Number.isNaN(joined)
+            ? 0
+            : Math.max(1, Math.ceil((new Date(`${todayDate}T12:00:00Z`).getTime() - joined) / (7 * 86400000)));
+          return { streak, submittedRate: possible ? posted / possible : null, weeksIn };
+        })(),
         gameStats: Object.fromEntries(
           ACTIVE_GAME_SLUGS.map((slug) => [
             slug,

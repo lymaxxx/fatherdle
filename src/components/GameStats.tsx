@@ -201,8 +201,10 @@ export function PlayerGameGrid({
           {playerName}&apos;s numbers in each game, read from the share codes
         </span>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-        {strengths.map((g) => {
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-4">
+        {[...strengths]
+          .sort((a, b) => Object.keys(GAME_ICON).indexOf(a.gameSlug) - Object.keys(GAME_ICON).indexOf(b.gameSlug))
+          .map((g) => {
           const st = gameStats[g.gameSlug];
           const main = st?.kpis[0];
           const dist = st?.distributions[0];
@@ -212,9 +214,18 @@ export function PlayerGameGrid({
           return (
             <div
               key={g.gameSlug}
-              className={`stat-tile bg-surface rounded-[18px] p-4 md:p-5 ${played ? "" : "opacity-50"}`}
+              className={`stat-tile bg-surface rounded-[16px] md:rounded-[18px] px-3 py-2.5 md:p-5 ${played ? "" : "opacity-50"}`}
             >
-              <div className="flex items-center gap-2.5">
+              {/* Phone: icon, name and label, average on the right */}
+              <div className="md:hidden flex items-center gap-3">
+                <GameIcon slug={g.gameSlug} size={36} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[14px] font-semibold truncate">{g.gameName}</div>
+                  <div className="text-[12px] text-muted truncate">{main?.label ?? ""}</div>
+                </div>
+                <span className="font-serif text-[30px] leading-none">{played ? main?.value ?? "–" : "–"}</span>
+              </div>
+              <div className="hidden md:flex items-center gap-2.5">
                 <GameIcon slug={g.gameSlug} size={26} />
                 <span className="text-[14px] font-semibold truncate flex-1">{g.gameName}</span>
                 <span
@@ -225,11 +236,6 @@ export function PlayerGameGrid({
                 >
                   {g.firstPlaces}× 1st
                 </span>
-              </div>
-              {/* Phone: one line with the average on the right */}
-              <div className="md:hidden flex items-baseline justify-between mt-2">
-                <span className="text-[12px] text-muted">{main?.label ?? ""}</span>
-                <span className="font-serif text-[30px] leading-none">{played ? main?.value ?? "–" : "–"}</span>
               </div>
               <div className="hidden md:block">
                 <div className="flex items-baseline gap-2.5 mt-3">

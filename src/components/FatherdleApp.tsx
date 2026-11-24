@@ -54,6 +54,7 @@ import {
 } from "./Charts";
 import { HighlightBlocks } from "./HighlightBlocks";
 import { StatsDeck } from "./StatsDeck";
+import { PlayerGeneral, PlayerHero } from "./PlayerPage";
 import { GameStatsView, PlayerGameGrid } from "./GameStats";
 import type { GameStatsPanel } from "@/lib/analytics/game-stats";
 import type { GroupStats } from "@/lib/analytics/group-stats";
@@ -94,6 +95,7 @@ interface LeagueApiResponse {
     standingRow: PlayerStandingRow | null;
     strengths: PlayerGameStrengthRow[];
     gameStats: Record<string, GameStatsPanel>;
+    extra: { streak: number; submittedRate: number | null; weeksIn: number };
     records: PlayerRecordItem[];
     dailySubCounts: Record<string, number>;
   };
@@ -104,6 +106,13 @@ interface LeagueApiResponse {
     columns: LeaderboardColumn[];
     stats: GameStatsPanel;
   };
+}
+
+/** True when dark text reads better on this colour. */
+function inkIsDark(hex: string): boolean {
+  const h = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 120;
 }
 
 function shiftIsoDate(iso: string, days: number): string {
@@ -1255,9 +1264,13 @@ export function FatherdleApp({
             4. INDIVIDUAL PLAYER PAGE (Screens 5 & 7)
            ========================================================= */}
         {activeTab === "players" && data.playerPage.standingRow && (
-          <div className="space-y-7">
-            <div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-6 lg:items-start space-y-7 lg:space-y-0">
-            <aside className="hidden lg:block bg-surface rounded-[24px] p-3 space-y-1 sticky top-[96px]">
+          <div className="space-y-5">
+            <h1 className="lg:hidden text-[44px] font-bold tracking-[-1.5px] leading-none">Players</h1>
+            <div className="lg:grid lg:grid-cols-[288px_minmax(0,1fr)] lg:gap-8 lg:items-start space-y-5 lg:space-y-0">
+            <aside className="hidden lg:block sticky top-[100px] p-1 -m-1">
+              <div className="px-3 pb-2 text-[11px] font-bold tracking-[1.6px] uppercase text-muted">
+                {data.players.length} players
+              </div>
               {data.players.map((p) => {
                 const active = p.id === data.playerPage.player.id;
                 const row = data.stats.standings.find((r) => r.player.id === p.id);
@@ -1266,281 +1279,69 @@ export function FatherdleApp({
                     key={p.id}
                     type="button"
                     onClick={() => setViewedPlayerId(p.id)}
+                    style={active ? { outlineColor: p.color } : undefined}
                     className={`rail-item w-full flex items-center gap-3 px-3 py-2.5 rounded-[14px] text-left ${
-                      active ? "bg-surface2 outline outline-1 outline-lime" : ""
+                      active ? "bg-surface2 outline outline-1" : ""
                     }`}
                   >
                     <span style={{ backgroundColor: p.color }} className="w-9 h-9 rounded-full text-[#121212] text-[15px] font-bold flex items-center justify-center shrink-0">
                       {p.avatarInitials}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[14px] font-semibold truncate">{p.name}</span>
-                      <span className="block text-[12px] text-muted">{row ? `${row.gamesPlayed} games` : "no games"}</span>
+                      <span className="block text-[15px] font-semibold truncate">{p.name}</span>
+                      <span className="block text-[12px] text-muted truncate">
+                        {row ? `${row.gamesPlayed} games · ${row.firstPlaces} ${row.firstPlaces === 1 ? "win" : "wins"}` : "no games"}
+                      </span>
                     </span>
-                    <span className="font-serif text-[26px] leading-none text-text">{row ? row.totalPoints : 0}</span>
+                    <span className="font-serif text-[28px] leading-none text-muted">{row ? row.totalPoints : 0}</span>
                   </button>
                 );
               })}
             </aside>
-            <div className="lg:hidden flex items-center gap-3 overflow-x-auto pb-1 -mx-5 px-5">
+            <div className="lg:hidden flex items-start gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 py-1">
               {data.players.map((p) => {
                 const active = p.id === data.playerPage.player.id;
                 return (
                   <button
                     key={p.id}
                     type="button"
+                    data-strip-active={active}
                     onClick={() => setViewedPlayerId(p.id)}
-                    aria-label={p.name}
-                    className={`shrink-0 p-1 rounded-full ${active ? "outline outline-1 outline-lime bg-surface2" : ""}`}
+                    className="shrink-0 w-[58px] flex flex-col items-center gap-1.5"
                   >
-                    <span style={{ backgroundColor: p.color }} className="w-11 h-11 rounded-full text-[#121212] text-[16px] font-bold flex items-center justify-center">
+                    <span
+                      style={{ backgroundColor: p.color, boxShadow: active ? `0 0 0 2px #121212, 0 0 0 4px ${p.color}` : undefined }}
+                      className="w-12 h-12 rounded-full text-[#121212] text-[17px] font-bold flex items-center justify-center"
+                    >
                       {p.avatarInitials}
                     </span>
+                    <span className={`text-[11px] truncate w-full text-center ${active ? "text-text font-semibold" : "text-muted"}`}>{p.name}</span>
                   </button>
                 );
               })}
             </div>
-            <div className="space-y-7 min-w-0">
+            <div className="space-y-6 min-w-0">
 
-            {/* Player Header + Period Selector */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div
-                  style={{ backgroundColor: data.playerPage.player.color }}
-                  className="w-16 h-16 rounded-full text-[#121212] text-[28px] font-extrabold flex items-center justify-center shrink-0"
-                >
-                  {data.playerPage.player.avatarInitials}
-                </div>
-                <div>
-                  <h1 className="text-[44px] sm:text-[56px] font-bold tracking-[-1.5px] leading-none">
-                    {data.playerPage.player.name}
-                  </h1>
-                  <p className="text-[13px] text-muted mt-1">
-                    Joined {data.playerPage.player.joinedAt}
-                  </p>
-                </div>
-              </div>
-              {renderPeriodSelector()}
-            </div>
-
-            {/* 4 Highlight Blocks for this Player */}
-            <HighlightBlocks
-              playerRow={data.playerPage.standingRow}
-              allStandings={data.stats.standings}
+            <PlayerHero
+              player={data.playerPage.player}
+              row={data.playerPage.standingRow}
               period={data.period}
               series={data.stats.timeSeries.series}
+              strengths={data.playerPage.strengths}
+              extra={data.playerPage.extra}
+              todayDate={data.todayDate}
+              dailySubCounts={data.playerPage.dailySubCounts}
+              periodControl={renderPeriodSelector(inkIsDark(data.playerPage.player.color))}
               onShare={() => setShareModalMode("player")}
-              isPlayerPage
             />
 
-            {/* Row 1: Points over time vs Leader + League position over time */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Points over time
-                  </h2>
-                  <span className="text-xs text-muted">
-                    Cumulative · grey is the leader
-                  </span>
-                </div>
-
-                <PointsOverTimeChart
-                  series={data.stats.timeSeries.series}
-                  players={data.players}
-                  visiblePlayerIds={[data.playerPage.player.id]}
-                  highlightPlayerId={data.playerPage.player.id}
-                  compareLeaderOnly
-                  mode="cumulative"
-                />
-              </div>
-
-              <div className="lg:col-span-5 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    League position
-                  </h2>
-                  <span className="text-xs text-muted">1 = top</span>
-                </div>
-
-                <PositionBumpChart
-                  series={data.stats.timeSeries.series}
-                  players={data.players}
-                  singlePlayerId={data.playerPage.player.id}
-                />
-
-                <div className="text-[12px] text-muted">
-                  Currently ranked #{data.playerPage.standingRow.rank} in{" "}
-                  {data.period.label}.
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Game Strengths Table (4.4) + Points by Game */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Game strengths
-                  </h2>
-                  <span className="text-xs text-muted">Sorted by average place</span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse tabular-nums">
-                    <thead>
-                      <tr className="border-b border-line/60 text-[11px] text-muted">
-                        <th className="py-2 font-medium">Game</th>
-                        <th className="py-2 text-right font-medium">Played</th>
-                        <th className="py-2 text-right font-medium">First places</th>
-                        <th className="py-2 text-right font-medium">Avg place</th>
-                        <th className="py-2 text-right font-medium">Best result</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line/40 text-[14px]">
-                      {data.playerPage.strengths.map((st) => (
-                        <tr key={st.gameSlug}>
-                          <td className="py-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedGameSlug(st.gameSlug);
-                                setActiveTab("games");
-                              }}
-                              className="flex items-center gap-2.5 font-bold text-text hover:underline"
-                            >
-                              <span
-                                style={{ backgroundColor: st.gameColor }}
-                                className="w-1.5 h-5 rounded-full"
-                              />
-                              <span>{st.gameName}</span>
-                            </button>
-                          </td>
-                          <td className="py-3 text-right font-bold text-text">
-                            {st.played}
-                          </td>
-                          <td className="py-3 text-right text-muted font-medium">
-                            {st.firstPlaces}
-                          </td>
-                          <td className="py-3 text-right font-bold text-text">
-                            {st.averagePlacement !== null
-                              ? st.averagePlacement.toFixed(1)
-                              : "–"}
-                          </td>
-                          <td className="py-3 text-right text-muted font-medium">
-                            {st.bestResult}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="bg-surface2/70 rounded-2xl p-3.5 flex items-start gap-2.5">
-                  <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
-                  <div className="text-[11px] text-muted">
-                    <strong className="text-text block">Average place</strong>
-                    Your mean placement in qualified games played. Lower is better.
-                  </div>
-                </div>
-              </div>
-
-              <div className="lg:col-span-5 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <h2 className="text-[19px] font-bold tracking-tight">
-                  Points by game
-                </h2>
-
-                <div className="space-y-3 pt-1">
-                  {data.playerPage.strengths
-                    .filter((s) => s.totalPoints > 0)
-                    .sort((a, b) => b.totalPoints - a.totalPoints)
-                    .map((s) => {
-                      const maxPts = Math.max(
-                        1,
-                        ...data.playerPage.strengths.map((x) => x.totalPoints)
-                      );
-                      const wPct = Math.max(12, (s.totalPoints / maxPts) * 100);
-                      return (
-                        <div key={s.gameSlug} className="flex items-center gap-3">
-                          <div className="w-24 text-[13px] font-bold text-text truncate">
-                            {s.gameName}
-                          </div>
-                          <div className="flex-1">
-                            <div
-                              style={{
-                                width: `${wPct}%`,
-                                backgroundColor: s.gameColor,
-                              }}
-                              className="h-[22px] rounded-[5px]"
-                            />
-                          </div>
-                          <div className="w-8 text-right text-[13px] font-bold text-text tabular-nums">
-                            {s.totalPoints}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-
-            {/* Row 3: Personal Records (4.3) + Activity Calendar */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-5 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <h2 className="text-[19px] font-bold tracking-tight">Records</h2>
-                <div className="divide-y divide-line/50">
-                  {data.playerPage.records.map((rec) => (
-                    <div
-                      key={rec.label}
-                      className="py-3 flex items-center justify-between gap-3"
-                    >
-                      <div>
-                        <div className="text-[14px] font-bold text-text">
-                          {rec.label}
-                        </div>
-                        <div className="text-[11px] text-muted">{rec.sublabel}</div>
-                      </div>
-                      <div
-                        style={{ color: data.playerPage.player.color }}
-                        className="font-serif text-[32px] leading-none"
-                      >
-                        {rec.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="lg:col-span-7 bg-surface border border-line/50 rounded-[22px] p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[19px] font-bold tracking-tight">
-                    Activity
-                  </h2>
-                  <span className="text-xs text-muted">Submissions per day</span>
-                </div>
-                <div className="grid grid-cols-7 sm:grid-cols-10 gap-[6px]">
-                  {data.stats.activityCalendar.map((day) => {
-                    const count = data.playerPage.dailySubCounts[day.date] || 0;
-                    const bg =
-                      count === 0
-                        ? "#2A2A27"
-                        : count <= 3
-                        ? "rgba(230, 235, 94, 0.35)"
-                        : count <= 6
-                        ? "rgba(230, 235, 94, 0.68)"
-                        : "#E6EB5E";
-                    return (
-                      <div
-                        key={day.date}
-                        style={{ backgroundColor: bg }}
-                        className="w-[24px] h-[24px] rounded-[5px]"
-                        title={`${day.label}: ${count} games submitted`}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <PlayerGeneral
+              player={data.playerPage.player}
+              leagues={data.leagues}
+              records={data.playerPage.records}
+              dailySubCounts={data.playerPage.dailySubCounts}
+              todayDate={data.todayDate}
+            />
 
             <PlayerGameGrid strengths={data.playerPage.strengths} gameStats={data.playerPage.gameStats} playerName={data.playerPage.player.name} accent={data.playerPage.player.color} />
             </div>
