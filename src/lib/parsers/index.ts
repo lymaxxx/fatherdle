@@ -672,7 +672,7 @@ const toNumber = (raw: string) => parseFloat(raw.replace(/,/g, ""));
 
 /** "Nov 16, 2026" -> "2026-11-16" */
 function dateFromHeader(block: string): string | null {
-  const m = block.match(/·\s*([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  const m = block.match(/(?:·|^)[ \t]*([A-Za-z]{3,9})\.?[ \t]+(\d{1,2}),?[ \t]+(\d{4})/m);
   if (!m) return null;
   const month = MONTHS_MAP[m[1].slice(0, 3).toLowerCase()];
   return month ? `${m[3]}-${month}-${m[2].padStart(2, "0")}` : null;
@@ -867,6 +867,39 @@ export function parseFlagments(block: string): ParsedGameSubmission | null {
   };
 }
 
+/**
+ * Parses Whenography share text:
+ * Whenography
+ * Nov 23, 2026
+ * Score: 2317 / 5000
+ * 🟧 19 yrs off · 🟩 spot on · ⬜ 38 yrs off · 🟧 17 yrs off · 🟨 12 yrs off
+ */
+export function parseWhenography(block: string): ParsedGameSubmission | null {
+  if (!/Whenography/i.test(block)) return null;
+  const score = block.match(/Score:\s*([\d,]+)\s*\/\s*([\d,]+)/i) ?? block.match(/([\d,]+)\s*\/\s*(5,?000)/);
+  if (!score) return null;
+  const points = toNumber(score[1]);
+  // Each round: a coloured square, then "N yrs off" or "spot on"
+  const rounds = [...block.matchAll(/(\p{Extended_Pictographic}|[🟥🟧🟨🟩🟦🟪⬜⬛🟫])\uFE0F?\s*(spot on|(\d+)\s*(?:yrs?|years?)\s*off)/giu)].map((m) => ({
+    tile: m[1],
+    yearsOff: m[3] ? parseInt(m[3], 10) : 0,
+  }));
+  const totalOff = rounds.length ? rounds.reduce((a, r) => a + r.yearsOff, 0) : null;
+  return {
+    gameSlug: "whenography",
+    gameName: GAMES.whenography.name,
+    puzzleId: null,
+    extractedDate: dateFromHeader(block),
+    primaryValue: points,
+    secondaryValue: null,
+    tertiaryValue: null,
+    displayResult: points.toLocaleString("en-GB"),
+    failed: false,
+    rawText: block.trim(),
+    metadata: { rounds, totalYearsOff: totalOff, outOf: toNumber(score[2]) },
+  };
+}
+
 const SINGLE_BLOCK_PARSERS: Array<(block: string) => ParsedGameSubmission | null> = [
   parseWordishingrilliontapdle,
   parseHuedle,
@@ -883,6 +916,7 @@ const SINGLE_BLOCK_PARSERS: Array<(block: string) => ParsedGameSubmission | null
   parseGeoguessr,
   parseFlagcognito,
   parseFlagments,
+  parseWhenography,
 ];
 
 /**
@@ -929,6 +963,7 @@ export function parseMultiGamePaste(rawInput: string): MultiParseResult {
     { slug: "geoguessr", regex: /^GeoGuessr\s+Daily\b/i },
     { slug: "flagcognito", regex: /^Flagcognito\b/i },
     { slug: "flagments", regex: /^Flagments\b/i },
+    { slug: "whenography", regex: /^Whenography\b/i },
   ];
 
   // Clean out pure divider lines (`_____`, `-------`, `(less moves is better)`, etc.)

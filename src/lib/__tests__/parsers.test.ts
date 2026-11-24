@@ -554,3 +554,29 @@ Solved 🟣
     expect(parsed.map((p) => p.primaryValue).sort((a, b) => a - b)).toEqual([0, 900]);
   });
 });
+
+describe("Whenography", () => {
+  const sample = `Whenography
+Nov 23, 2026
+Score: 2317 / 5000
+🟧 19 yrs off · 🟩 spot on · ⬜ 38 yrs off · 🟧 17 yrs off · 🟨 12 yrs off
+
+Can you beat 2,317?
+https://guessdash.com/whenography?c=ui0cxt`;
+
+  it("reads the score, the date and every round", () => {
+    const r = parseSingleGameText(sample)!;
+    expect(r.gameSlug).toBe("whenography");
+    expect(r.primaryValue).toBe(2317);
+    expect(r.displayResult).toBe("2,317");
+    expect(r.extractedDate).toBe("2026-11-23");
+    const meta = r.metadata as { rounds: Array<{ tile: string; yearsOff: number }>; totalYearsOff: number };
+    expect(meta.rounds.map((x) => x.yearsOff)).toEqual([19, 0, 38, 17, 12]);
+    expect(meta.totalYearsOff).toBe(86);
+  });
+
+  it("splits out of a multi-game paste", () => {
+    const res = parseMultiGamePaste(`${sample}\n\nMetrodle #1640\n3/6\n#metrodle https://metrodle.com/`);
+    expect(res.parsed.map((p) => p.gameSlug).sort()).toEqual(["metrodle", "whenography"]);
+  });
+});

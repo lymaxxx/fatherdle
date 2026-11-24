@@ -250,6 +250,37 @@ function Graphic({ item, reveal }: { item: FeedResultItem; reveal: boolean }) {
     );
   }
 
+  if (slug === "whenography" && item.detail) {
+    const rounds = (item.detail.rounds as Array<{ tile: string; yearsOff: number }>) ?? [];
+    const tileColour: Record<string, string> = {
+      "🟩": "#8FD14F",
+      "🟨": "#E6EB5E",
+      "🟧": "#FF8A3D",
+      "🟥": "#FF5A1F",
+      "⬜": "#C9CCD1",
+      "⬛": "#3A3935",
+    };
+    const max = Math.max(1, ...rounds.map((r) => r.yearsOff));
+    return (
+      <div className="w-full max-w-[340px] space-y-1.5">
+        {rounds.map((r, i) => (
+          <div key={i} className="flex items-center gap-2.5 text-[12px] md:text-[13px]">
+            <span style={{ backgroundColor: tileColour[r.tile] ?? "#C9CCD1" }} className="w-3.5 h-3.5 rounded-[3px] shrink-0" />
+            <div className="flex-1 h-2 rounded-full bg-surface2 overflow-hidden">
+              <div
+                style={{ width: `${r.yearsOff === 0 ? 100 : Math.max(6, 100 - (r.yearsOff / max) * 90)}%`, backgroundColor: tileColour[r.tile] ?? "#C9CCD1" }}
+                className="h-full rounded-full grow-in"
+              />
+            </div>
+            <span className={`w-[76px] text-right tabular-nums ${r.yearsOff === 0 ? "text-lime font-semibold" : "text-muted"}`}>
+              {r.yearsOff === 0 ? "spot on" : `${r.yearsOff} yrs off`}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (slug === "flagments" && item.detail) {
     const d = item.detail as { solved?: boolean; peeks?: number; misses?: number | null };
     const chip = "rounded-full bg-surface2 px-3 py-1 text-[13px] font-semibold";

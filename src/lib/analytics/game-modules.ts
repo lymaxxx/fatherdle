@@ -159,9 +159,17 @@ export function createGameAnalyticsModule(gameSlug: GameSlug): GameAnalyticsModu
 
       case "geoguessr":
       case "flagcognito":
-      case "flagments": {
+      case "flagments":
+      case "whenography": {
         const ranges =
-          gameSlug === "geoguessr"
+          gameSlug === "whenography"
+            ? [
+                { label: "<1,500", min: 0, max: 1499 },
+                { label: "1,500–2,499", min: 1500, max: 2499 },
+                { label: "2,500–3,499", min: 2500, max: 3499 },
+                { label: "3,500+", min: 3500, max: 99999 },
+              ]
+            : gameSlug === "geoguessr"
             ? [
                 { label: "<10,000", min: 0, max: 9999 },
                 { label: "10,000–14,999", min: 10000, max: 14999 },

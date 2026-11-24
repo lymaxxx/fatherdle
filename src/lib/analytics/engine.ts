@@ -295,6 +295,7 @@ function computeRawStandingsForWindow(
         geoguessr: 0,
         flagcognito: 0,
         flagments: 0,
+        whenography: 0,
         custom: 0,
       },
     });

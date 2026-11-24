@@ -171,7 +171,7 @@ function roundsFrom(rawText: string): number[] | null {
   return scores.length ? scores : null;
 }
 
-const DETAIL_GAMES: GameSlug[] = ["geoguessr", "flagcognito", "flagments"];
+const DETAIL_GAMES: GameSlug[] = ["geoguessr", "flagcognito", "flagments", "whenography"];
 
 function detailFrom(metadataJson: string): Record<string, unknown> | null {
   try {

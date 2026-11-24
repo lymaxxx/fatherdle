@@ -16,6 +16,7 @@ export type GameSlug =
   | "geoguessr"
   | "flagcognito"
   | "flagments"
+  | "whenography"
   | "custom";
 
 export interface GameConfig {

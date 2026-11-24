@@ -147,7 +147,7 @@ export function PasteResultModal({
               rows={7}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, Wordishingrilliontapdle, Metrodle, Connections, Strands, GeoGuessr, Flagcognito, or Flagments...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
+              placeholder={`Paste your copied share text from Wordle, MapTap, Krillion, Noillirk, Huedle, Flagle, Catfishing, Poople, Wordishingrilliontapdle, Metrodle, Connections, Strands, GeoGuessr, Flagcognito, Flagments, or Whenography...\n\nYou can paste several games in this box at once — Fatherdle splits and identifies them automatically.`}
               className="w-full bg-bg border border-line rounded-2xl p-4 text-[13px] font-mono text-text placeholder:text-muted/60 focus:outline-none focus:border-lime resize-y"
             />
           </div>

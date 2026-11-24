@@ -274,6 +274,19 @@ export const GAMES: Record<GameSlug, GameConfig> = {
     minSubmissions: DEFAULT_MIN_SUBMISSIONS,
     axisStart: 0,
   },
+  whenography: {
+    slug: "whenography",
+    name: "Whenography",
+    shortName: "Whenography",
+    color: "#C9CCD1",
+    textColor: "#121212",
+    url: "https://guessdash.com/whenography",
+    description: "Guess the year of five photos. Fewer years off means more points, out of 5,000.",
+    rankingDirection: "higher",
+    unit: "pts",
+    minSubmissions: DEFAULT_MIN_SUBMISSIONS,
+    axisStart: 0,
+  },
   custom: {
     slug: "custom",
     name: "Custom Game",
@@ -305,4 +318,5 @@ export const ACTIVE_GAME_SLUGS: GameSlug[] = [
   "geoguessr",
   "flagcognito",
   "flagments",
+  "whenography",
 ];

@@ -15,6 +15,7 @@ export const GAME_ICON: Record<string, { code: string; sub?: string; from: strin
   geoguessr: { code: "G", from: "#1E3A8A", to: "#DC2626", fg: "#FFFFFF" },
   flagcognito: { code: "FC", from: "#F2A7C3", to: "#6FA8DC" },
   flagments: { code: "FM", from: "#FF8A3D", to: "#E6EB5E" },
+  whenography: { code: "WH", from: "#EEF0F3", to: "#7D828A" },
 };
 
 export function gameGradient(slug: string, angle = 90): string {

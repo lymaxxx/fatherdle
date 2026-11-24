@@ -209,6 +209,20 @@ function buildPanels(slug: string, subs: Submission[]): Omit<GameStatsPanel, "re
       return scorePanel(subs, evenEdges(nums), "", "total", true);
     case "flagcognito":
       return scorePanel(subs, evenEdges(nums), "", "points", true);
+    case "whenography": {
+      const rounds = subs.flatMap((x) => {
+        try {
+          return ((JSON.parse(x.metadataJson)?.rounds ?? []) as Array<{ yearsOff: number }>).map((r) => r.yearsOff);
+        } catch {
+          return [];
+        }
+      });
+      return scorePanel(subs, [0, 1500, 2000, 2500, 3000, 3500, 4000, 5001], "", "score", true, [
+        { label: "Spot-on rounds", value: String(rounds.filter((r) => r === 0).length), sub: `of ${rounds.length} photos` },
+        { label: "Average miss", value: rounds.length ? `${fmt(avg(rounds))} yrs` : "–", sub: "per photo" },
+        { label: "Biggest miss", value: rounds.length ? `${Math.max(...rounds)} yrs` : "–" },
+      ]);
+    }
     case "flagments": {
       const unsolved = subs.filter((s) => s.failed).length;
       return scorePanel(subs, evenEdges(nums), "", "points", true, [
