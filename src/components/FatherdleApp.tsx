@@ -606,6 +606,10 @@ export function FatherdleApp({
                       openJoin("new");
                       return;
                     }
+                    if (e.target.value === "__admin") {
+                      setActiveTab("admin");
+                      return;
+                    }
                     chooseIdentity(e.target.value);
                   }}
                   className="absolute inset-0 opacity-0 cursor-pointer"
@@ -616,6 +620,7 @@ export function FatherdleApp({
                     </option>
                   ))}
                   {isAdmin && <option value="__add">+ Add player…</option>}
+                  {showAdminLink && <option value="__admin">Admin panel</option>}
                 </select>
               </label>
             ) : (
@@ -693,10 +698,10 @@ export function FatherdleApp({
                 <button
                   type="button"
                   onClick={() => openJoin("existing")}
-                  className="w-full h-[60px] rounded-full bg-lime text-[#121212] text-[16px] font-extrabold flex items-center justify-center gap-2"
+                  className="btn-primary w-full h-[60px] rounded-full bg-lime text-[#121212] text-[17px] font-bold flex items-center justify-center gap-2"
                 >
-                  <Users className="w-5 h-5" />
-                  <span>Choose an existing player</span>
+                  <UserPlus className="w-5 h-5" />
+                  <span>Join the league</span>
                 </button>
               )}
               {canAddPlayers && (
@@ -716,7 +721,7 @@ export function FatherdleApp({
               <button
                 type="button"
                 onClick={() => setIsPasteOpen(true)}
-                className="hidden md:flex w-full h-[60px] rounded-full border border-line text-text text-[16px] font-bold items-center justify-center gap-2 hover:bg-surface"
+                className="btn-secondary flex w-full h-[60px] rounded-full border-[1.5px] border-line text-text text-[16px] font-semibold items-center justify-center gap-2"
               >
                 <ClipboardPaste className="w-5 h-5" />
                 <span>Paste a result</span>
