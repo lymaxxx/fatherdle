@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { GroupStats } from "@/lib/analytics/group-stats";
 import { GAMES } from "@/lib/constants";
 import type { GameSlug } from "@/lib/types";
-import { ColumnChart, CountUp, GameIcon } from "./ui";
+import { CountUp, GameIcon } from "./ui";
 
-const WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function Panel({
   title,
@@ -89,15 +89,9 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
   }, [n]);
   const card = cards[i % n];
 
-  const peakWd = stats.resultsByWeekday.indexOf(Math.max(...stats.resultsByWeekday));
   const most = stats.mostPlayed.slice(0, 7);
   const maxGame = Math.max(1, ...most.map((g) => g.count));
-  const leads = stats.leadChangesPerWeek.slice(-9);
-  const peakLead = leads.reduce((best, w, k) => (w.value > leads[best].value ? k : best), 0);
-  const partPct = stats.participationOverall === null ? null : Math.round(stats.participationOverall * 100);
-  const qualPills = 50;
-  const qualOn = stats.qualificationRate === null ? 0 : Math.round(stats.qualificationRate * qualPills);
-  const waffleOn = partPct === null ? 0 : Math.round((partPct / 100) * 60);
+  const cleanOn = stats.cleanSolves ? Math.round((stats.cleanSolves.pct / 100) * 90) : 0;
 
   return (
     <div className="space-y-5 md:space-y-6">
@@ -108,20 +102,28 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
             aria-hidden
             className="absolute -right-10 bottom-6 w-[150px] h-[170px] md:w-[180px] md:h-[200px] rounded-[28px] bg-[#121212]/[0.06] rotate-[-12deg]"
           />
-          <div className="relative flex items-center justify-between">
-            <span className="text-[11px] md:text-[13px] font-bold tracking-[1.6px]">{kicker}</span>
-            <div className="flex items-center gap-1.5">
-              {cards.map((_, k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-label={`Card ${k + 1}`}
-                  onClick={() => setI(k)}
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    k === i % n ? "w-6 bg-[#121212]" : "w-2 bg-[#121212]/25"
-                  }`}
-                />
-              ))}
+          <div className="relative flex items-center justify-between gap-3">
+            <span className="text-[11px] md:text-[13px] font-bold tracking-[1.6px]">
+              {kicker} · CARD {(i % n) + 1} OF {n}
+            </span>
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="Previous card" onClick={() => setI((v) => (v - 1 + n) % n)} className="tap w-7 h-7 rounded-full bg-[#121212]/15 flex items-center justify-center">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-1.5">
+                {cards.map((_, k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-label={`Card ${k + 1}`}
+                    onClick={() => setI(k)}
+                    className={`h-2 rounded-full transition-all duration-300 ${k === i % n ? "w-6 bg-[#121212]" : "w-2 bg-[#121212]/25"}`}
+                  />
+                ))}
+              </div>
+              <button type="button" aria-label="Next card" onClick={() => setI((v) => (v + 1) % n)} className="tap w-7 h-7 rounded-full bg-[#121212] text-lime flex items-center justify-center">
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
           {card && (
@@ -134,6 +136,23 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
                   {card.sub && <div className="text-[12px] md:text-[14px] opacity-70 mt-0.5">{card.sub}</div>}
                 </div>
               </div>
+              {card.split && (
+                <div className="grid grid-cols-3 gap-2 md:gap-3 mt-4 md:mt-6">
+                  {(
+                    [
+                      ["LONGEST RUN", stats.highlights.longestRun],
+                      ["LEAD CHANGES", stats.highlights.leadChanges],
+                      ["AVG MARGIN", stats.highlights.avgMargin],
+                    ] as const
+                  ).map(([lab, h]) => (
+                    <div key={lab} className="rounded-[12px] bg-[#121212]/10 px-3 py-2.5">
+                      <div className="text-[9px] md:text-[10px] font-bold tracking-[1.4px] opacity-60">{lab}</div>
+                      <div className="text-[16px] md:text-[20px] font-bold leading-tight mt-0.5">{h?.label ?? "–"}</div>
+                      <div className="hidden md:block text-[11px] opacity-60 truncate">{h?.detail ?? ""}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {card.split && stats.weeksLed.length > 0 && (
                 <div className="mt-auto pt-5">
                   <div className="hidden md:block text-[11px] font-bold tracking-[1.6px] mb-2">WEEKS WON</div>
@@ -159,42 +178,38 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
           )}
         </div>
 
-        {/* Right of the deck */}
+        {/* Right of the deck: stats that work even on Today or early in the week */}
         <div className="grid grid-cols-2 gap-3 md:gap-4 content-start">
           <div className="stat-tile bg-orange text-[#121212] rounded-[22px] p-4 md:p-5 min-h-[118px] md:min-h-[204px] flex flex-col">
-            <div className="text-[12px] md:text-[13px] font-semibold md:font-bold md:tracking-[1.4px] md:uppercase">Busiest day</div>
-            <div className="stat-num font-serif text-[56px] md:text-[96px] leading-[0.9] mt-2 md:mt-4">
-              {stats.busiestWeekday?.label ?? "–"}
-            </div>
-            <div className="hidden md:block text-[13px] font-semibold mt-auto">
-              {stats.busiestWeekday ? `${stats.busiestWeekday.count.toLocaleString("en-GB")} results` : ""}
-            </div>
+            <div className="text-[12px] md:text-[13px] font-semibold md:font-bold md:tracking-[1.4px] md:uppercase">Tightest win</div>
+            <div className="stat-num font-serif text-[48px] md:text-[84px] leading-[0.9] mt-2 md:mt-4 break-words">{stats.tightestWin?.value ?? "–"}</div>
+            <div className="text-[12px] md:text-[13px] font-semibold mt-auto pt-2">{stats.tightestWin?.caption ?? "Needs a few results"}</div>
           </div>
           <div className="stat-tile bg-sky text-[#121212] rounded-[22px] p-4 md:p-5 min-h-[118px] md:min-h-[204px] flex flex-col">
-            <div className="text-[12px] md:text-[13px] font-semibold md:font-bold md:tracking-[1.4px] md:uppercase">Peak hour</div>
-            <div className="stat-num font-serif text-[56px] md:text-[96px] leading-[0.9] mt-2 md:mt-4">{stats.peakHour?.label ?? "–"}</div>
-            <div className="hidden md:block text-[13px] font-semibold mt-auto">
-              {stats.peakHour ? `${stats.peakHour.count.toLocaleString("en-GB")} results posted then` : ""}
+            <div className="text-[12px] md:text-[13px] font-semibold md:font-bold md:tracking-[1.4px] md:uppercase">Upset share</div>
+            <div className="stat-num font-serif text-[56px] md:text-[96px] leading-[0.9] mt-2 md:mt-4">
+              {stats.upsetShare ? `${stats.upsetShare.pct}%` : "–"}
             </div>
+            <div className="text-[12px] md:text-[13px] font-semibold mt-auto pt-2">{stats.upsetShare?.caption ?? "won by non-leader"}</div>
           </div>
           <div className="hidden md:block col-span-2 bg-surface rounded-[22px] p-5 space-y-4">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <div className="text-[12px] font-bold tracking-[1.4px] uppercase text-muted">Participation</div>
-                <div className="text-[13px] text-muted">of possible game-days played</div>
+                <div className="text-[12px] font-bold tracking-[1.4px] uppercase text-muted">Clean solves</div>
+                <div className="text-[13px] text-muted">zero-mistake or 1-guess hits</div>
               </div>
-              <div className="font-serif text-[64px] leading-none text-teal">{partPct === null ? "–" : `${partPct}%`}</div>
+              <div className="font-serif text-[64px] leading-none text-teal">{stats.cleanSolves ? `${stats.cleanSolves.pct}%` : "–"}</div>
             </div>
-            <div className="grid grid-cols-[repeat(20,minmax(0,1fr))] gap-[4px]">
-              {Array.from({ length: 60 }, (_, k) => (
-                <span key={k} className={`aspect-square rounded-[3px] ${k < waffleOn ? "bg-teal" : "bg-surface2"}`} />
+            <div className="grid grid-cols-[repeat(30,minmax(0,1fr))] gap-[4px]">
+              {Array.from({ length: 90 }, (_, k) => (
+                <span key={k} className={`aspect-square rounded-[2px] ${k < cleanOn ? "bg-teal" : "bg-surface2"}`} />
               ))}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-4 md:gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-4 md:gap-5">
         <Panel title="Most played" note={`Results posted per game · ${stats.periodLabel.toLowerCase()}`}>
           <div className="space-y-3">
             {most.map((g) => (
@@ -212,64 +227,80 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
             ))}
           </div>
         </Panel>
-        <div className="bg-orange text-[#121212] rounded-[22px] p-5 md:p-6 flex flex-col gap-5">
-          <div className="text-[15px] md:text-[16px] font-semibold opacity-80">Games that qualified</div>
-          <div className="grid grid-cols-10 gap-x-1.5 gap-y-1.5 md:mt-4">
-            {Array.from({ length: qualPills }, (_, k) => (
-              <span key={k} className={`h-[12px] md:h-[16px] rounded-full ${k < qualOn ? "bg-[#121212]" : "bg-[#121212]/15"}`} />
+        <div className="bg-orange text-[#121212] rounded-[22px] p-5 md:p-6 flex flex-col gap-5 min-h-[260px]">
+          <div className="text-[15px] md:text-[16px] font-semibold opacity-80">Clean sweeps &amp; aces</div>
+          <div className="space-y-2.5 md:mt-4">
+            {stats.sweeps.lines.length === 0 && <div className="text-[13px] opacity-70">No clean solves yet</div>}
+            {stats.sweeps.lines.map((l) => (
+              <div key={l.label} className="flex items-baseline justify-between gap-3 text-[13px] md:text-[14px]">
+                <span className="font-semibold">{l.label}</span>
+                <span className="whitespace-nowrap font-semibold">
+                  {l.who} · {l.pct}%
+                </span>
+              </div>
             ))}
           </div>
           <div className="mt-auto">
-            <div className="font-serif text-[64px] md:text-[80px] leading-none">
-              {stats.qualificationRate === null ? "–" : <><CountUp value={Math.round(stats.qualificationRate * 100)} />%</>}
+            <div className="font-serif text-[56px] md:text-[72px] leading-none">
+              <CountUp value={stats.sweeps.flawless} />
             </div>
-            <div className="text-[13px] opacity-75 mt-1">of games reach half the active players</div>
+            <div className="text-[13px] opacity-75 mt-1">flawless solves across all players</div>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 md:gap-5">
-        <Panel title="When everyone plays" note="Results by weekday, all players">
-          <div className="md:hidden">
-            <ColumnChart
-              height={170}
-              showValues={false}
-              radius={6}
-              bars={stats.resultsByWeekday.map((v, k) => ({ label: WD[k][0], value: v, color: k === peakWd ? "#E6EB5E" : "#2A2A27" }))}
-            />
-          </div>
-          <div className="hidden md:block">
-            <ColumnChart
-              height={210}
-              gap={12}
-              radius={6}
-              labelClass="text-[12px] text-muted"
-              bars={stats.resultsByWeekday.map((v, k) => ({
-                label: WD[k],
-                value: v,
-                color: k === peakWd ? "#E6EB5E" : "#2A2A27",
-                valueClass: k === peakWd ? "text-lime" : "text-muted",
-              }))}
-            />
+        <Panel title="Who plays when" note="Median submission time · 6am to midnight">
+          <div className="space-y-3.5">
+            {stats.whenPlays.length === 0 && <div className="text-[13px] text-muted">Not enough results yet</div>}
+            {stats.whenPlays.map((p) => {
+              const pos = (h: number) => `${Math.max(0, Math.min(100, ((h - 6) / 18) * 100))}%`;
+              const t = (h: number) => {
+                const hh = Math.floor(h) % 24;
+                const mm = Math.round((h - Math.floor(h)) * 60);
+                const ap = hh >= 12 ? "pm" : "am";
+                return `${hh % 12 === 0 ? 12 : hh % 12}:${String(mm).padStart(2, "0")} ${ap}`;
+              };
+              const left = Math.max(0, (Math.max(6, p.lo) - 6) / 18) * 100;
+              const width = Math.max(3, ((Math.min(24, p.hi) - Math.max(6, p.lo)) / 18) * 100);
+              return (
+                <div key={p.name} className="flex items-center gap-3">
+                  <span className="w-12 md:w-14 text-[13px] md:text-[14px] font-semibold truncate">{p.name}</span>
+                  <div className="relative flex-1 h-[6px] rounded-full bg-surface2">
+                    <span style={{ left: `${left}%`, width: `${width}%`, backgroundColor: p.color }} className="absolute top-0 h-full rounded-full opacity-45" />
+                    <span style={{ left: pos(p.median), backgroundColor: p.color }} className="absolute top-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full" />
+                  </div>
+                  <span className="w-[62px] text-right text-[12px] md:text-[13px] font-bold tabular-nums">{t(p.median)}</span>
+                  <span className="hidden md:inline w-[96px] text-[12px] text-muted">{p.tag}</span>
+                </div>
+              );
+            })}
+            <div className="flex justify-between text-[10px] md:text-[11px] text-muted pt-1 md:pr-[168px] md:pl-[68px]">
+              {["6am", "9am", "12pm", "3pm", "6pm", "9pm", "12am"].map((x) => (
+                <span key={x}>{x}</span>
+              ))}
+            </div>
           </div>
         </Panel>
-        <Panel title="Lead changes" note="Per league week" className="hidden md:block">
-          {leads.length === 0 ? (
-            <span className="text-muted text-[13px]">No weeks yet</span>
-          ) : (
-            <ColumnChart
-              height={210}
-              showValues={false}
-              radius={6}
-              labelClass="text-[12px] text-muted"
-              bars={leads.map((w, k) => ({
-                label: w.value,
-                value: w.value,
-                title: w.label,
-                color: k === peakLead && w.value > 0 ? "#FF8A3D" : "#2A2A27",
-              }))}
-            />
-          )}
+        <Panel title="Most consistent" note="Narrowest score spread">
+          <div className="space-y-3.5">
+            {stats.consistent.length === 0 && <div className="text-[13px] text-muted">Needs a few more days of play</div>}
+            {stats.consistent.map((p) => {
+              const maxSpread = Math.max(1, ...stats.consistent.map((x) => x.spread));
+              const w = 30 + (p.spread / maxSpread) * 55;
+              const l = 50 - w / 2;
+              return (
+                <div key={p.name} className="flex items-center gap-3">
+                  <span className="w-12 md:w-14 text-[13px] md:text-[14px] font-semibold truncate">{p.name}</span>
+                  <div className="relative flex-1 h-[6px] rounded-full bg-surface2">
+                    <span style={{ left: `${l}%`, width: `${w}%`, backgroundColor: p.color }} className="absolute top-0 h-full rounded-full" />
+                  </div>
+                  <span className="w-10 text-right text-[12px] text-muted tabular-nums">±{p.spread}%</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-[12px] text-muted pt-1">{stats.consistentNote}</div>
         </Panel>
       </div>
 
@@ -277,15 +308,15 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
         {(
           [
             ["closest league finish", stats.records.closestFinish, "bg-lime text-[#121212]", ""],
-            ["biggest blowout", stats.records.biggestBlowout, "bg-surface2 text-text", "hidden md:flex"],
-            ["hardest day", stats.records.hardestDay, "bg-violet text-[#121212]", "hidden md:flex"],
-            ["everyone played", stats.records.longestRun, "bg-sky text-[#121212]", ""],
+            ["most tied at 1st", stats.moreRecords.mostTied, "bg-surface2 text-text", "hidden md:flex"],
+            ["biggest upset", stats.moreRecords.biggestUpset, "bg-violet text-[#121212]", "hidden md:flex"],
+            ["everyone finished", stats.records.longestRun, "bg-sky text-[#121212]", ""],
           ] as const
         ).map(([label, rec, colours, vis]) => (
-          <div key={label} className={`stat-tile ${colours} ${vis || "flex"} flex-col rounded-[22px] p-4 md:p-5 min-h-[96px] md:min-h-[256px]`}>
+          <div key={label} className={`${colours} ${vis || "flex"} flex-col rounded-[22px] p-4 md:p-5 min-h-[96px] md:min-h-[168px]`}>
             <div className="text-[12px] md:text-[14px] opacity-75">{label}</div>
             <div className="mt-auto">
-              <div className="stat-num font-serif text-[36px] md:text-[56px] leading-none mt-2">{rec?.label ?? "–"}</div>
+              <div className="font-serif text-[34px] md:text-[44px] leading-none mt-2 break-words">{rec?.label ?? "–"}</div>
               <div className="hidden md:block text-[12px] opacity-75 mt-2">{rec?.detail ?? "Not enough data yet"}</div>
             </div>
           </div>
@@ -322,18 +353,29 @@ export function StatsDeck({ stats }: { stats: GroupStats }) {
             })}
           </div>
         </Panel>
-        <Panel title="Group records" note={stats.periodLabel}>
-          <div className="divide-y divide-line/70">
-            {stats.groupRecords.length === 0 && <div className="text-[13px] text-muted">Not enough data yet</div>}
-            {stats.groupRecords.map((r) => (
-              <div key={r.label} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <div className="text-[14px] font-semibold">{r.label}</div>
-                  <div className="text-[12px] text-muted truncate">{r.who}</div>
+        <Panel title="Closest rivalries" note="Head-to-head days">
+          <div className="space-y-5">
+            {stats.rivalries.length === 0 && <div className="text-[13px] text-muted">Needs a few more shared days</div>}
+            {stats.rivalries.map((r) => {
+              const total = Math.max(1, r.a + r.b);
+              return (
+                <div key={r.aName + r.bName + r.label} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[13px] font-semibold">
+                    <span>
+                      {r.aName} {r.a}
+                    </span>
+                    <span className="text-[11px] text-muted font-normal">{r.label}</span>
+                    <span>
+                      {r.b} {r.bName}
+                    </span>
+                  </div>
+                  <div className="flex h-[6px] gap-[3px]">
+                    <span style={{ flex: total ? r.a / total : 1, backgroundColor: r.aColor }} className="rounded-full" />
+                    <span style={{ flex: total ? r.b / total : 1, backgroundColor: r.bColor }} className="rounded-full" />
+                  </div>
                 </div>
-                <div className="font-serif text-[34px] leading-none">{r.value}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Panel>
       </div>
