@@ -1,6 +1,6 @@
 /** Gradient + short code per game (HANDOVER §3). */
 export const GAME_ICON: Record<string, { code: string; sub?: string; from: string; to: string; fg?: string }> = {
-  wordle: { code: "WD", from: "#E6EB5E", to: "#8FD14F" },
+  wordle: { code: "WD", from: "#E6EB5E", to: "#5CC8B0" },
   maptap: { code: "MT", from: "#FF8A3D", to: "#FF5A1F" },
   krillion: { code: "K", from: "#F6F3EA", to: "#F2A7C3" },
   noillirk: { code: "N", from: "#C9CC6A", to: "#6B7036" },
@@ -23,3 +23,10 @@ export function gameGradient(slug: string, angle = 90): string {
   return g ? `linear-gradient(${angle}deg, ${g.from}, ${g.to})` : "#2A2A27";
 }
 
+
+/** Edge-halo radial gradient: the core colour holds through the centre, the second colour glows along the edge. */
+export function gameHalo(slug: string, shape: "circle" | "ellipse" = "ellipse"): string {
+  const g = GAME_ICON[slug];
+  if (!g) return "#2A2A27";
+  return `radial-gradient(${shape} at 50% 50%, ${g.from} 0%, ${g.from} 42%, ${g.to} 100%)`;
+}

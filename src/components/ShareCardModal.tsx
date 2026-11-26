@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Download, Share2, X } from "lucide-react";
 import { DailyGameStanding, DatePeriod, GameSlug, PlayerStandingRow } from "@/lib/types";
 import { APP_WORDMARK, GAMES, gameOf } from "@/lib/constants";
+import { GAME_ICON } from "@/lib/game-icons";
 
 import {
   CARD_H,
@@ -20,6 +21,7 @@ import {
   gameCardOps,
 } from "@/lib/share-scene";
 import type { GameStatsPanel } from "@/lib/analytics/game-stats";
+import type { DailyPointsSeriesPoint, PlayerGameStrengthRow } from "@/lib/analytics/engine";
 import type { LeagueWeek } from "@/lib/analytics/feed";
 
 function playerNameSize(name: string): number {
@@ -38,6 +40,10 @@ function dayRowLayout(count: number) {
     nameFont: compact ? Math.min(24, Math.floor(h * 0.58)) : 26,
     resultFont: compact ? Math.min(40, Math.floor(h * 0.92)) : 50,
   };
+}
+
+function ordinalOf(n: number): string {
+  return formatOrdinal(n);
 }
 
 function formatOrdinal(n: number): string {
@@ -60,6 +66,8 @@ export function ShareCardModal({
   dayStandings,
   gameStanding,
   gameStats,
+  dailySeries,
+  strengths,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -72,6 +80,8 @@ export function ShareCardModal({
   dayStandings?: PlayerStandingRow[];
   gameStanding?: DailyGameStanding;
   gameStats?: GameStatsPanel;
+  dailySeries?: DailyPointsSeriesPoint[];
+  strengths?: PlayerGameStrengthRow[];
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [wholeDay, setWholeDay] = useState(false);
@@ -126,92 +136,119 @@ export function ShareCardModal({
     .toUpperCase();
 
   const gamesTotal = (dayGames ?? []).length;
-  const sceneOps: Op[] =
-    mode === "game" && gameStanding
-      ? (() => {
-          const slug = gameStanding.gameSlug;
-          const rangeLabel = (period.preset === "all" ? "All time" : period.label).toUpperCase();
-          const board = allStandings
-            .map((r) => ({ name: r.player.name, color: r.player.color, pts: r.pointsByGame[slug] ?? 0 }))
-            .filter((r) => r.pts > 0)
-            .sort((x, y) => y.pts - x.pts);
-          const k = gameStats?.kpis ?? [];
-          const players = board.length;
-          return gameCardOps({
-            name: gameOf(slug).name,
-            slug,
-            rangeLabel,
-            kpis: [
-              [String(gameStats?.results ?? 0), "results"],
-              [String(players), plural(players, "player")],
-              ...k.slice(0, 2).map((x) => [x.value, x.label] as [string, string]),
-            ].slice(0, 4) as Array<[string, string]>,
-            leaderboard: board.map((r) => ({ name: r.name, color: r.color, result: `${r.pts} pts`, points: r.pts })),
-            leaderboardLabel: "League points in this game",
-            footer: [rangeLabel, `${gameStats?.results ?? 0} results`, "Fatherdle league"],
-            distribution: gameStats?.distributions[0] ?? null,
-          });
-        })()
-      : mode === "day" && wholeDay
-      ? groupDayOps({
-          dateLabel: dayLabel,
-          counted: (dayGames ?? []).filter((g) => g.status === "Qualified").length,
-          totalGames: gamesTotal,
-          players: (dayStandings ?? []).map((r) => ({
-            playerId: r.player.id,
-            name: r.player.name,
-            color: r.player.color,
-            points: r.totalPoints,
-            rank: r.rank,
-            played: r.gamesPlayed > 0,
-            gamesPlayed: r.gamesPlayed,
-            qualifiedGames: r.qualifiedGamesPlayed,
-            firstPlaces: r.firstPlaces,
-          })),
-          games: (dayGames ?? []).map((g) => ({
-            name: gameOf(g.gameSlug).name,
-            slug: g.gameSlug,
-            submitted: g.submissionCount,
-            of: g.totalPlayers,
-            counted: g.status === "Qualified",
-          })),
-        })
-      : mode === "day"
-      ? playerDayOps({
-          name: playerRow.player.name,
-          dateLabel: dayLabel,
-          rank: playerRow.rank,
-          points: playerRow.totalPoints,
-          gamesTotal,
-          rows: dayRows.map((r) => ({
-            name: r.game.name,
-            slug: r.key,
-            placement: r.placement,
-            outOf: r.outOf,
-            points: r.points,
-            counts: r.counts,
-          })),
-        })
-      : week && mode === "final"
-      ? leagueFinalOps(week)
-      : week && mode === "league"
-      ? leagueCurrentOps(week)
-      : playerStatsOps({
-          name: playerRow.player.name,
-          color: playerRow.player.color,
-          rank: playerRow.rank,
-          points: playerRow.totalPoints,
-          qualifiedGames: playerRow.qualifiedGamesPlayed,
-          firstPlaces: playerRow.firstPlaces,
-          averagePlacement: playerRow.averagePlacement,
-          periodLabel: period.label,
-          games: gamePointsEntries.map(([slug, pts]) => ({
-            name: gameOf(slug).name,
-            color: gameOf(slug).color,
-            slug,
-            points: pts,
-          })),
-        });
+  const longDate = new Date(`${period.endDate}T12:00:00Z`)
+    .toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+    .replace(",", "")
+    .toUpperCase();
+  const rangeLabel = (period.preset === "all" ? "All time" : period.label).toUpperCase();
+  const mineStrengths = strengths && strengths.length ? strengths : undefined;
+
+  let sceneOps: Op[];
+  if (mode === "game" && gameStanding) {
+    const slug = gameStanding.gameSlug;
+    const board = allStandings
+      .map((r) => ({ name: r.player.name, color: r.player.color, pts: r.pointsByGame[slug] ?? 0 }))
+      .filter((r) => r.pts > 0)
+      .sort((x, y) => y.pts - x.pts);
+    const topPts = Math.max(1, ...board.map((b) => b.pts));
+    const k = gameStats?.kpis ?? [];
+    const dist = gameStats?.distributions[0];
+    const accent = GAME_ICON[slug]?.from ?? "#FFD93D";
+    sceneOps = gameCardOps({
+      name: gameOf(slug).name,
+      slug,
+      rangeLabel,
+      kpis: [
+        [String(gameStats?.results ?? 0), "results"],
+        ...k.slice(0, 3).map((x) => [x.value, x.label] as [string, string]),
+      ].slice(0, 4) as Array<[string, string]>,
+      boardLabel: "League points in this game",
+      leaderboard: board.map((r) => ({ name: r.name, color: r.color, value: String(r.pts), ratio: r.pts / topPts })),
+      distributionLabel: dist?.title ?? "Spread",
+      distribution: dist ? dist.bars.map((b) => ({ ...b, color: b.color ?? (/^(fail|x)$/i.test(b.label) ? "#FF5A1F" : accent) })) : null,
+      footer: [
+        ["Players", String(board.length)],
+        ["Results", String(gameStats?.results ?? 0)],
+        ["Range", rangeLabel.length > 14 ? rangeLabel.slice(0, 13) + "…" : rangeLabel],
+      ],
+    });
+  } else if (mode === "day" && wholeDay) {
+    const counted = (dayGames ?? []).filter((g) => g.status === "Qualified").length;
+    const standings = dayStandings ?? [];
+    sceneOps = groupDayOps({
+      dateText: longDate,
+      counted,
+      pending: (dayGames ?? []).filter((g) => g.submissionCount > 0 && g.status !== "Qualified").length,
+      pointsShared: standings.reduce((a, r) => a + r.totalPoints, 0),
+      players: standings.map((r) => ({
+        name: r.player.name,
+        color: r.player.color,
+        points: r.totalPoints,
+        firstPlaces: r.firstPlaces,
+        gamesPlayed: r.gamesPlayed,
+        played: r.gamesPlayed > 0,
+      })),
+      games: (dayGames ?? []).map((g) => ({
+        name: gameOf(g.gameSlug).name,
+        slug: g.gameSlug,
+        submitted: g.submissionCount,
+        of: g.totalPlayers,
+        counted: g.status === "Qualified",
+        leader: g.rankings[0]?.playerName ?? "",
+        result: g.rankings[0]?.displayResult ?? "",
+      })),
+    });
+  } else if (mode === "day") {
+    sceneOps = playerDayOps({
+      name: playerRow.player.name,
+      dateText: longDate,
+      rank: playerRow.rank,
+      points: playerRow.totalPoints,
+      gamesTotal,
+      rows: dayRows.map((r) => ({
+        name: r.game.name,
+        slug: r.key,
+        placement: r.placement,
+        outOf: r.outOf,
+        points: r.points,
+        counts: r.counts,
+        result: r.result,
+      })),
+    });
+  } else if (week && mode === "final") {
+    sceneOps = leagueFinalOps(week);
+  } else if (week && mode === "league") {
+    sceneOps = leagueCurrentOps(week);
+  } else {
+    const byGame = new Map((mineStrengths ?? []).filter((x) => x.gameSlug).map((x) => [x.gameSlug as string, x]));
+    const strengthsOk = !!mineStrengths && mineStrengths.some((x) => x.played > 0);
+    sceneOps = playerStatsOps({
+      name: playerRow.player.name,
+      color: playerRow.player.color,
+      rank: playerRow.rank,
+      points: playerRow.totalPoints,
+      qualifiedGames: playerRow.qualifiedGamesPlayed,
+      firstPlaces: playerRow.firstPlaces,
+      averagePlacement: playerRow.averagePlacement,
+      positionChange: playerRow.positionChange,
+      periodLabel: period.label,
+      daily: (dailySeries ?? []).slice(-10).map((p) => ({
+        label: new Date(`${p.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }),
+        value: p.dailyByPlayer[playerRow.player.id] ?? 0,
+      })),
+      games: gamePointsEntries.map(([slug, pts]) => {
+        const st = strengthsOk ? byGame.get(slug) : undefined;
+        return {
+          name: gameOf(slug).name,
+          color: gameOf(slug).color,
+          slug,
+          points: pts,
+          best: st?.bestResult || undefined,
+          place: st?.averagePlacement ? ordinalOf(Math.round(st.averagePlacement)) : undefined,
+        };
+      }),
+    });
+  }
 
   const handleDownloadSvgCard = async (useWebShare = false) => {
     // Make sure the brand fonts are ready before painting to canvas.
@@ -453,115 +490,6 @@ function ScaledCard({ children }: { children: React.ReactNode }) {
 }
 
 /** Per-player daily card, laid out as in the design reference (1080x1350). */
-function DayCard({
-  playerName,
-  rank,
-  points,
-  dayLabel,
-  rows,
-}: {
-  playerName: string;
-  rank: number;
-  points: number;
-  dayLabel: string;
-  rows: DayRow[];
-}) {
-  const abs = (style: React.CSSProperties): React.CSSProperties => ({
-    position: "absolute",
-    whiteSpace: "nowrap",
-    ...style,
-  });
-  const nameSize = playerNameSize(playerName);
-  return (
-    <div
-      style={{
-        width: CARD_W,
-        height: CARD_H,
-        background: "#121212",
-        position: "relative",
-        fontFamily: DM,
-        color: "#121212",
-      }}
-    >
-      <div style={abs({ left: 56, top: 62, width: 22, height: 22, borderRadius: "50%", background: "#E6EB5E" })} />
-      <div style={abs({ left: 92, top: 62, fontSize: 22, fontWeight: 800, letterSpacing: 3, color: "#F4F1EA" })}>
-        {APP_WORDMARK}
-      </div>
-      <div style={abs({ left: 624, top: 62, width: 400, textAlign: "right", fontSize: 22, fontWeight: 700, letterSpacing: 3, color: "#F4F1EA" })}>
-        {dayLabel}
-      </div>
-
-      <div style={abs({ left: 56, top: 110, width: 968, height: 420, borderRadius: 48, background: "#E6EB5E", overflow: "hidden" })}>
-        <div style={abs({ left: 40, top: 52, fontSize: nameSize, lineHeight: "176px", fontWeight: 800, letterSpacing: (-7 * nameSize) / 176 })}>
-          {playerName}
-        </div>
-        {[
-          { x: 44, v: formatOrdinal(rank), label: "League position" },
-          { x: 330, v: `${points}`, label: "Points" },
-          { x: 620, v: `${rows.length}`, label: "Games played" },
-        ].map((m) => (
-          <React.Fragment key={m.label}>
-            <div style={abs({ left: m.x, top: 268, fontFamily: SERIF, fontSize: 96, lineHeight: "96px", letterSpacing: -3 })}>
-              {m.v}
-            </div>
-            <div style={abs({ left: m.x + 4, top: 366, fontSize: 20, fontWeight: 600 })}>{m.label}</div>
-          </React.Fragment>
-        ))}
-      </div>
-
-      {rows.map((r, i) => {
-        const layout = dayRowLayout(rows.length);
-        const compact = layout.compact;
-        return (
-        <div
-          key={r.key}
-          style={{
-            position: "absolute",
-            left: 56,
-            top: 556 + i * layout.pitch,
-            width: 968,
-            height: layout.h,
-            borderRadius: 16,
-            background: r.game.color,
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            padding: "0 24px",
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: layout.nameFont, fontWeight: 800, whiteSpace: "nowrap" }}>{r.game.name}</div>
-            {!compact && (
-              <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2, whiteSpace: "nowrap" }}>
-                {r.vs}
-              </div>
-            )}
-          </div>
-          <div style={{ width: 213, textAlign: "right", fontFamily: SERIF, fontSize: layout.resultFont, lineHeight: `${layout.resultFont}px`, whiteSpace: "nowrap" }}>
-            {r.result}
-          </div>
-          <div style={{ width: 187, textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: layout.nameFont, fontWeight: 800, whiteSpace: "nowrap" }}>
-              {formatOrdinal(r.placement)} of {r.outOf}
-              {compact ? ` · ${r.counts ? `+${r.points}` : "–"}` : ""}
-            </div>
-            {!compact && (
-              <div style={{ fontSize: 18, fontWeight: 500, color: "#121212B3", marginTop: 2 }}>
-                {r.counts ? `+${r.points} pts` : "Pending"}
-              </div>
-            )}
-          </div>
-        </div>
-        );
-      })}
-
-      <div style={abs({ left: 56, top: 1252, fontSize: 22, fontWeight: 500, color: "#948F84" })}>
-        Pending games count once enough players have submitted.
-      </div>
-    </div>
-  );
-}
-
 /** Draws a list of share-card shapes and text as absolutely positioned elements. */
 function SceneView({ ops }: { ops: Op[] }) {
   return (
@@ -569,16 +497,20 @@ function SceneView({ ops }: { ops: Op[] }) {
       {ops.map((op, i) => {
         if (op.t === "rect") {
           const r = Array.isArray(op.r) ? op.r.map((n) => `${n}px`).join(" ") : op.r ? `${op.r}px` : 0;
-          const background = op.grad
+          const meshBg = op.mesh
+            ? [...op.mesh.map((c, i) => `radial-gradient(circle at ${(i % 3) * 50}% ${Math.floor(i / 3) * 50}%, ${c} 0%, ${c}00 62%)`), op.fill].join(", ")
+            : null;
+          const background = meshBg ?? (op.halo
+            ? `radial-gradient(ellipse at 50% 50%, ${op.halo[0]} 0%, ${op.halo[0]} 42%, ${op.halo[1]} 100%)`
+            : op.grad
             ? `linear-gradient(90deg, ${op.grad[0]}, ${op.grad[1]})`
-            : op.fade
-            ? `linear-gradient(180deg, ${op.fade} 0%, ${op.fill} 55%, ${op.fill} 100%)`
-            : op.fill;
+            : op.fill);
           return (
             <div
               key={i}
               style={{
                 position: "absolute", left: op.x, top: op.y, width: op.w, height: op.h, background, borderRadius: r,
+                ...(op.stroke ? { boxShadow: `inset 0 0 0 1px ${op.stroke}` } : {}),
                 ...(op.rot ? { transform: `rotate(${op.rot}deg)`, transformOrigin: `${op.pivot![0] - op.x}px ${op.pivot![1] - op.y}px` } : {}),
               }}
             />
@@ -619,8 +551,8 @@ function SceneView({ ops }: { ops: Op[] }) {
               position: "absolute",
               left: op.x,
               top: op.top,
-              width: op.align === "right" ? op.w : undefined,
-              textAlign: op.align === "right" ? "right" : "left",
+              width: op.align === "right" || op.align === "center" ? op.w : undefined,
+              textAlign: op.align === "right" ? "right" : op.align === "center" ? "center" : "left",
               fontFamily: op.serif ? SERIF : DM,
               fontSize: op.size,
               lineHeight: `${op.lh}px`,

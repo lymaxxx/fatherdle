@@ -58,7 +58,7 @@ import { PlayerGeneral, PlayerHero } from "./PlayerPage";
 import { GameStatsView, PlayerGameGrid } from "./GameStats";
 import type { GameStatsPanel } from "@/lib/analytics/game-stats";
 import type { GroupStats } from "@/lib/analytics/group-stats";
-import { GameIcon, GAME_ICON, gameGradient, CountUp } from "./ui";
+import { GameIcon, GAME_ICON, gameHalo, CountUp } from "./ui";
 import { PasteResultModal } from "./PasteResultModal";
 import { ShareCardModal } from "./ShareCardModal";
 
@@ -473,7 +473,7 @@ export function FatherdleApp({
                 key={item.id}
                 type="button"
                 onClick={() => setPreset(item.id)}
-                className={`px-2 sm:px-3 md:px-4 py-1.5 md:py-2 rounded-full text-[11.5px] sm:text-[12px] md:text-[13px] font-semibold whitespace-nowrap transition-colors duration-200 ${
+                className={`tap px-2 sm:px-3 md:px-4 py-1.5 md:py-2 rounded-full text-[11.5px] sm:text-[12px] md:text-[13px] font-semibold whitespace-nowrap transition-colors duration-200 ${
                   active
                     ? onLight
                       ? "bg-[#121212] text-text"
@@ -492,7 +492,7 @@ export function FatherdleApp({
           type="button"
           aria-label="Custom range"
           onClick={() => setPreset("custom")}
-          className={`shrink-0 h-9 md:h-10 rounded-full border-[1.5px] inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold w-9 md:w-auto md:px-4 transition-colors ${
+          className={`tap shrink-0 h-9 md:h-10 rounded-full border-[1.5px] inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold w-9 md:w-auto md:px-4 transition-colors ${
             preset === "custom"
               ? onLight
                 ? "bg-[#121212] text-text border-[#121212]"
@@ -1312,10 +1312,10 @@ export function FatherdleApp({
                     type="button"
                     data-strip-active={active}
                     onClick={() => setViewedPlayerId(p.id)}
-                    className="shrink-0 w-[58px] flex flex-col items-center gap-1.5"
+                    className="tap shrink-0 w-[58px] flex flex-col items-center gap-1.5"
                   >
                     <span
-                      style={{ backgroundColor: p.color, boxShadow: active ? `0 0 0 2px #121212, 0 0 0 4px ${p.color}` : undefined }}
+                      style={{ backgroundColor: p.color, boxShadow: active ? "0 0 0 2px #121212, 0 0 0 4px #E6EB5E" : undefined }}
                       className="w-12 h-12 rounded-full text-[#121212] text-[17px] font-bold flex items-center justify-center"
                     >
                       {p.avatarInitials}
@@ -1392,7 +1392,7 @@ export function FatherdleApp({
                 );
               })}
             </aside>
-            {/* Icon strip (phone) */}
+            {/* Icon strip (phone): lime outline on the icon only */}
             <div className="lg:hidden flex items-start gap-1 overflow-x-auto no-scrollbar -mx-5 px-5 py-1">
               {data.games.map((g) => {
                 const active = g.slug === selectedGameSlug;
@@ -1402,12 +1402,15 @@ export function FatherdleApp({
                     type="button"
                     onClick={() => setSelectedGameSlug(g.slug)}
                     data-strip-active={active}
-                    className={`shrink-0 w-[76px] py-2 rounded-[16px] flex flex-col items-center gap-1.5 ${
-                      active ? "outline outline-1 outline-lime bg-surface2" : ""
-                    }`}
+                    className="tap shrink-0 w-[72px] py-1.5 flex flex-col items-center gap-1.5"
                     aria-label={g.name}
                   >
-                    <GameIcon slug={g.slug} size={48} />
+                    <span
+                      style={active ? { boxShadow: "0 0 0 2px #121212, 0 0 0 4px #E6EB5E" } : undefined}
+                      className="rounded-[15px] inline-flex"
+                    >
+                      <GameIcon slug={g.slug} size={48} />
+                    </span>
                     <span className={`text-[11px] w-full px-1 truncate text-center ${active ? "text-text" : "text-muted"}`}>
                       {g.name}
                     </span>
@@ -1427,7 +1430,7 @@ export function FatherdleApp({
               ].slice(0, 4);
               return (
                 <div
-                  style={{ background: gameGradient(g.slug, 135), color: fg }}
+                  style={{ background: gameHalo(g.slug), color: fg }}
                   className="rounded-[24px] p-5 md:p-9 space-y-5 md:space-y-7"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -1762,7 +1765,7 @@ export function FatherdleApp({
                 if (item.id === "players" && !viewedPlayerId) setViewedPlayerId(currentUserId);
                 setActiveTab(item.id);
               }}
-              className={`h-[52px] rounded-[16px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors duration-200 ${
+              className={`tap h-[52px] rounded-[16px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors duration-200 ${
                 active ? "bg-lime text-[#121212]" : "text-muted active:text-text"
               }`}
             >
@@ -1886,6 +1889,8 @@ export function FatherdleApp({
           dayStandings={data.today.standings}
           gameStanding={data.gamePage.todayStanding}
           gameStats={data.gamePage.stats}
+          dailySeries={data.stats.timeSeries.series}
+          strengths={data.playerPage.player.id === (activeTab === "players" && data.playerPage.standingRow ? data.playerPage.standingRow : currentUserStandingRow)?.player.id ? data.playerPage.strengths : undefined}
           week={shareModalMode === "final" ? shareWeek ?? undefined : data.leagues.current}
         />
       )}

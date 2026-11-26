@@ -58,11 +58,8 @@
 .btn-secondary:active { transform: translateY(2px) scale(0.97); }
 
 .bar-row { transition: transform 180ms var(--ease-out); }
-.bar-row:hover { transform: translateY(-2px); }
 .bar-row .bar-fill { transition: width 400ms var(--ease-out), filter 180ms; }
-.bar-row:hover .bar-fill { filter: brightness(1.08); }
 .bar-row .bar-score { display: inline-block; transition: transform 180ms var(--ease-out); }
-.bar-row:hover .bar-score { transform: scale(1.12); }
 
 .game-tile { transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out); box-shadow: 0 0 0 1px transparent; }
 .game-tile:hover { transform: translateY(-4px); box-shadow: 0 0 0 1px #E6EB5E; }
@@ -78,15 +75,8 @@
   65% { transform: rotate(6deg) scale(0.96); } 100% { transform: rotate(0) scale(1); }
 }
 
-.stat-tile { position: relative; overflow: hidden; transition: transform 180ms var(--ease-out); }
-.stat-tile::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: #E6EB5E;
-  transform: scaleX(0); transform-origin: left; transition: transform 300ms var(--ease-out);
-}
-.stat-tile:hover { transform: translateY(-3px); }
-.stat-tile:hover::before { transform: scaleX(1); }
-.stat-tile .stat-num { display: inline-block; transition: transform 180ms var(--ease-out); transform-origin: left bottom; }
-.stat-tile:hover .stat-num { transform: scale(1.06); }
+.stat-tile { position: relative; overflow: hidden; }
+.stat-tile .stat-num { display: inline-block; }
 
 .chart-bar { transition: transform 180ms var(--ease-out), filter 180ms; transform-origin: bottom; position: relative; }
 .chart-bar:hover { filter: brightness(1.2); transform: scaleY(1.04); }
@@ -103,3 +93,19 @@
 @keyframes deckin { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Tap feedback for controls (all sizes) */
+.tap { transition: transform 120ms var(--ease-out), opacity 120ms var(--ease-out); }
+.tap:active { transform: scale(0.97); opacity: 0.85; }
+
+/* Phones and tablets: no hover motion at all, only tap states */
+@media (max-width: 1023px), (hover: none) {
+  .nav-tab::after, .btn-primary:hover, .btn-secondary:hover, .game-tile:hover, .rail-item:hover,
+  .game-icon:hover, .chart-bar:hover { transform: none; box-shadow: none; animation: none; }
+  .game-tile:hover .game-icon { transform: none; }
+  .btn-primary:hover { box-shadow: none; }
+  .btn-secondary:hover { background-color: transparent; }
+  .rail-item:hover { background-color: transparent; }
+  .chart-bar:hover { filter: none; }
+  .btn-primary:active, .btn-secondary:active { transform: scale(0.97); opacity: 0.85; }
+}

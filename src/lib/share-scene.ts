@@ -2,8 +2,8 @@ import type { LeagueWeek } from "./analytics/feed";
 import { GAME_ICON } from "./game-icons";
 
 /**
- * League share cards (1080x1350) described once as a list of shapes and text, so the on-screen
- * preview and the downloaded PNG are drawn from exactly the same layout.
+ * Share cards (1080x1350) described once as a list of shapes and text, so the on-screen preview
+ * and the downloaded PNG are drawn from exactly the same layout.
  */
 
 export const CARD_W = 1080;
@@ -20,8 +20,10 @@ export type Op =
       h: number;
       fill: string;
       r?: number | [number, number, number, number];
+      stroke?: string; // 1px hairline just inside the edge
       grad?: [string, string]; // left-to-right gradient, overrides fill
-      fade?: string; // vertical fade from this colour at the top to fill at the bottom
+      halo?: [string, string]; // centred edge-halo radial gradient: core colour, edge colour
+      mesh?: string[]; // 3x3 mesh gradient (9 colours, row-major), drawn over `fill`
       rot?: number; // degrees, about `pivot`
       pivot?: [number, number];
     }
@@ -37,8 +39,8 @@ export type Op =
       color: string;
       serif?: boolean;
       ls?: number;
-      align?: "left" | "right";
-      w?: number; // box width for right-aligned text
+      align?: "left" | "right" | "center";
+      w?: number; // box width for right/centre-aligned text
       rot?: number;
       pivot?: [number, number];
     }
@@ -46,9 +48,11 @@ export type Op =
 
 const INK = "#121212";
 const TEXT = "#F4F1EA";
+const SOFT = "#F4F1EAB3"; // high-contrast label colour on the mesh
 const MUTED = "#948F84";
-const LIME = "#E6EB5E";
-const LINE = "#3A3935";
+const PANEL = "#12121255"; // translucent surface so the mesh breathes through evenly
+const HAIR = "#FFFFFF14";
+const HAIR_LINE = "#FFFFFF22";
 
 // Lucide "trophy" at 24x24
 const TROPHY = [
@@ -65,64 +69,222 @@ function nameSize(name: string, max: number, maxWidth = 860): number {
   return Math.min(max, Math.floor(maxWidth / Math.max(1, name.length * 0.58)));
 }
 
-// Shared card system (HANDOVER §6): accent fade from the top edge, wordmark, tilted date chip,
-// title, four KPI tiles, labelled sections, three footer pills.
-const SURFACE = "#1C1C1B";
-const ACCENTS = {
-  orange: ["#FF8A3D", "#2B1A10"],
-  violet: ["#B79CF5", "#1E1A2B"],
-  blue: ["#6FA8DC", "#141D27"],
-  yellow: ["#FFD93D", "#2A2610"],
-  pink: ["#F2A7C3", "#2A1A22"],
-} as const;
-export type Accent = keyof typeof ACCENTS;
+const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+const plural = (n: number, one: string, many = `${one}s`) => (n === 1 ? one : many);
+const ordinalOf = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
 
 function textWidth(text: string, size: number, ls = 0): number {
-  return Math.ceil(text.length * size * 0.6 + text.length * ls);
+  return Math.ceil(text.length * size * 0.56 + text.length * ls);
 }
 
-function frame(accent: Accent, dateText: string, title: string, sub: string, titleMax = 108): Op[] {
-  const [col, tint] = ACCENTS[accent];
-  const chipW = textWidth(dateText, 26, 1) + 56;
-  const size = nameSize(title, titleMax, 968);
-  return [
-    { t: "rect", x: 0, y: 0, w: CARD_W, h: CARD_H, fill: INK, fade: tint },
-    { t: "circle", x: 56, y: 56, d: 22, fill: col },
-    { t: "text", x: 92, top: 56, lh: 28, text: "FATHERDLE", size: 22, weight: 800, color: col, ls: 3 },
-    { t: "rect", x: 56, y: 112, w: chipW, h: 56, fill: col, r: 28, rot: -2, pivot: [56 + chipW / 2, 140] },
-    { t: "text", x: 56 + 28, top: 126, lh: 28, text: dateText, size: 26, weight: 700, color: INK, ls: 1, rot: -2, pivot: [56 + chipW / 2, 140] },
-    { t: "text", x: 56, top: 196, lh: size, text: title, size, weight: 700, color: TEXT, ls: -Math.round(size / 40) },
-    { t: "text", x: 56, top: 196 + size + 6, lh: 40, text: sub, size: 30, weight: 500, color: MUTED },
+// ---------------------------------------------------------------------------------------------
+// Card system (HANDOVER §6)
+// ---------------------------------------------------------------------------------------------
+
+const THEMES = {
+  orange: {
+    accent: "#FF8A3D",
+    // top-left glows, bottom-right falls into near-black
+    mesh: ["#FF6A1A", "#B8470F", "#4A1E0A", "#8A3A0C", "#3A1A0C", "#1E1008", "#2A1608", "#1A0F0A", "#120C09"],
+  },
+  violet: {
+    accent: "#B79CF5",
+    mesh: ["#5B3FC4", "#3A2A8A", "#1B1740", "#2E2670", "#1A1738", "#101022", "#1A2A12", "#121A10", "#101012"],
+  },
+  blue: {
+    accent: "#6FA8DC",
+    mesh: ["#2E7BC4", "#1C4F86", "#0E2038", "#17406E", "#0E1D33", "#0B1522", "#0A1A22", "#0E2A2E", "#1D4F45"],
+  },
+  yellow: {
+    accent: "#FFD93D",
+    mesh: ["#8A7A12", "#5E3A8A", "#2A1E48", "#4A4410", "#2A2040", "#18132A", "#2A260C", "#1C1830", "#2E2040"],
+  },
+  pink: {
+    accent: "#F2A7C3",
+    mesh: ["#E0457B", "#8A2468", "#2E1230", "#7A1E52", "#3A1530", "#1C0F1C", "#3A1226", "#1E0F18", "#140D12"],
+  },
+} as const;
+export type Accent = keyof typeof THEMES;
+
+interface FrameOpts {
+  theme: Accent;
+  right: string; // top-right label, e.g. "DAY · ALL GAMES"
+  dateText: string; // first filled element so it reads first
+  title?: string;
+  titleSize?: number;
+}
+
+function frame(o: FrameOpts): Op[] {
+  const t = THEMES[o.theme];
+  const chipW = textWidth(o.dateText, 38, -0.5) + 64;
+  const ops: Op[] = [
+    { t: "rect", x: 0, y: 0, w: CARD_W, h: CARD_H, fill: "#0C0C0D", mesh: [...t.mesh] },
+    { t: "circle", x: 56, y: 56, d: 20, fill: t.accent },
+    { t: "text", x: 90, top: 54, lh: 24, text: "DAILY GAMES LEAGUE", size: 18, weight: 700, color: t.accent, ls: 3 },
+    { t: "text", x: 624, top: 54, lh: 24, text: o.right, size: 18, weight: 700, color: t.accent, ls: 3, align: "right", w: 400 },
+    { t: "rect", x: 56, y: 96, w: chipW, h: 72, fill: t.accent, r: 12, rot: -2, pivot: [56 + chipW / 2, 132] },
+    {
+      t: "text",
+      x: 56 + 30,
+      top: 112,
+      lh: 40,
+      text: o.dateText,
+      size: 38,
+      weight: 800,
+      color: INK,
+      ls: -1,
+      rot: -2,
+      pivot: [56 + chipW / 2, 132],
+    },
   ];
+  if (o.title) {
+    const size = o.titleSize ?? nameSize(o.title, 96, 968);
+    ops.push({ t: "text", x: 56, top: 186, lh: size, text: o.title, size, weight: 700, color: TEXT, ls: -Math.round(size / 30) });
+  }
+  return ops;
 }
 
-function kpis(top: number, items: Array<[string, string]>): Op[] {
-  const w = 230;
-  const ops: Op[] = [];
+/** Open KPI strip: hairline above and below, four columns, no box. */
+function kpiStrip(top: number, items: Array<[string, string]>, accent: string): Op[] {
+  const ops: Op[] = [
+    { t: "rect", x: 56, y: top, w: 968, h: 1, fill: HAIR_LINE },
+    { t: "rect", x: 56, y: top + 84, w: 968, h: 1, fill: HAIR_LINE },
+  ];
   items.slice(0, 4).forEach(([value, label], i) => {
-    const x = 56 + i * (w + 16);
-    ops.push({ t: "rect", x, y: top, w, h: 150, fill: SURFACE, r: 18 });
-    ops.push({ t: "text", x: x + 22, top: top + 20, lh: 70, text: value, size: 68, weight: 400, color: TEXT, serif: true, ls: -1 });
-    ops.push({ t: "text", x: x + 24, top: top + 102, lh: 24, text: label, size: 19, weight: 600, color: MUTED });
+    const x = 56 + i * 242;
+    if (i > 0) ops.push({ t: "rect", x: x - 14, y: top + 16, w: 1, h: 54, fill: HAIR_LINE });
+    ops.push({ t: "text", x: x + (i ? 2 : 16), top: top + 10, lh: 44, text: value, size: 44, weight: 400, color: i === 0 ? accent : TEXT, serif: true });
+    ops.push({ t: "text", x: x + (i ? 2 : 16), top: top + 56, lh: 20, text: label, size: 16, weight: 600, color: SOFT });
   });
   return ops;
 }
 
 function label(top: number, text: string): Op {
-  return { t: "text", x: 56, top, lh: 22, text: text.toUpperCase(), size: 18, weight: 700, color: MUTED, ls: 3 };
+  return { t: "text", x: 56, top, lh: 22, text: text.toUpperCase(), size: 17, weight: 700, color: SOFT, ls: 3 };
 }
 
-function pills(items: string[]): Op[] {
+function panel(y: number, h: number, x = 56, w = 968): Op {
+  return { t: "rect", x, y, w, h, fill: PANEL, stroke: HAIR, r: 24 };
+}
+
+/** Three equal footer pills: muted label then a bold value. */
+function pills(items: Array<[string, string]>, y = 1214): Op[] {
   const ops: Op[] = [];
-  let x = 56;
-  for (const it of items.slice(0, 3)) {
-    const w = textWidth(it, 20, 0) + 44;
-    ops.push({ t: "rect", x, y: 1250, w, h: 48, fill: SURFACE, r: 24 });
-    ops.push({ t: "text", x: x + 22, top: 1262, lh: 24, text: it, size: 20, weight: 600, color: TEXT });
-    x += w + 12;
-  }
+  items.slice(0, 3).forEach(([lab, val], i) => {
+    const x = 56 + i * 326;
+    ops.push({ t: "rect", x, y, w: 316, h: 50, fill: PANEL, stroke: HAIR, r: 25 });
+    const labW = textWidth(lab, 16);
+    ops.push({ t: "text", x: x + 20, top: y + 15, lh: 20, text: lab, size: 16, weight: 500, color: SOFT });
+    ops.push({ t: "text", x: x + 20 + labW + 10, top: y + 12, lh: 26, text: clip(val, Math.max(8, Math.floor((316 - 60 - labW) / 11))), size: 20, weight: 700, color: TEXT });
+  });
   return ops;
 }
+
+function avatar(x: number, y: number, d: number, color: string, name: string, dim = false): Op[] {
+  return [
+    { t: "circle", x, y, d, fill: dim ? "#FFFFFF1A" : color },
+    {
+      t: "text",
+      x,
+      top: y + (d - d * 0.5) / 2 - 1,
+      lh: d * 0.5,
+      text: name.slice(0, 1).toUpperCase(),
+      size: Math.round(d * 0.46),
+      weight: 800,
+      color: dim ? MUTED : INK,
+      align: "center",
+      w: d,
+    },
+  ];
+}
+
+/** Coloured bar with a dark track, as in the standings panels. */
+function trackBar(x: number, y: number, w: number, h: number, ratio: number, color: string): Op[] {
+  return [
+    { t: "rect", x, y, w, h, fill: "#FFFFFF14", r: 6 },
+    ...(ratio > 0 ? [{ t: "rect", x, y, w: Math.max(14, Math.round(w * Math.min(1, ratio))), h, fill: color, r: 6 } as Op] : []),
+  ];
+}
+
+interface GameTile {
+  name: string;
+  slug?: string;
+  big: string; // serif result
+  sub?: string;
+  segments?: { total: number; on: number[]; strong?: number }; // mini visual along the bottom
+  tag?: string; // small chip top-right, e.g. "1ST"
+  dim?: boolean;
+}
+
+/** Top three: one equal-height row, edge-halo gradients, mini visual underneath. */
+function topTiles(tiles: GameTile[], y: number, h: number): Op[] {
+  const ops: Op[] = [];
+  const w = 316;
+  tiles.slice(0, 3).forEach((t, i) => {
+    const x = 56 + i * (w + 10);
+    const icon = t.slug ? GAME_ICON[t.slug] : undefined;
+    const fg = icon?.fg ?? INK;
+    ops.push({ t: "rect", x, y, w, h, fill: icon?.from ?? "#E6EB5E", halo: icon ? [icon.from, icon.to] : undefined, r: 22 });
+    ops.push({ t: "text", x: x + 16, top: y + 16, lh: 28, text: clip(t.name, 17), size: 22, weight: 700, color: fg });
+    if (t.tag) {
+      const tw = textWidth(t.tag, 12, 1) + 18;
+      ops.push({ t: "rect", x: x + w - 16 - tw, y: y + 16, w: tw, h: 24, fill: "#12121233", r: 12 });
+      ops.push({ t: "text", x: x + w - 16 - tw, top: y + 20, lh: 16, text: t.tag, size: 12, weight: 800, color: fg, ls: 1, align: "center", w: tw });
+    }
+    if (!t.tag) ops.push({ t: "text", x: x + w - 16 - 150, top: y + 8, lh: 44, text: t.big, size: 42, weight: 400, color: fg, serif: true, align: "right", w: 150 });
+    else ops.push({ t: "text", x: x + 16, top: y + 52, lh: 56, text: t.big, size: 54, weight: 400, color: fg, serif: true });
+    if (t.segments) {
+      const segW = Math.floor((w - 32 - (t.segments.total - 1) * 4) / t.segments.total);
+      for (let k = 0; k < t.segments.total; k++) {
+        const on = t.segments.on.includes(k);
+        ops.push({
+          t: "rect",
+          x: x + 16 + k * (segW + 4),
+          y: y + h - 44,
+          w: segW,
+          h: 5,
+          fill: k === t.segments.strong ? "#121212" : on ? "#12121266" : "#12121226",
+          r: 3,
+        });
+      }
+    }
+    if (t.sub) ops.push({ t: "text", x: x + 16, top: y + h - 30, lh: 18, text: clip(t.sub, 30), size: 15, weight: 600, color: fg });
+  });
+  return ops;
+}
+
+/** The rest: a two-column list inside one translucent panel. */
+function compactList(rows: GameTile[], y: number, h: number): Op[] {
+  if (rows.length === 0) return [];
+  const perCol = Math.max(1, Math.ceil(rows.length / 2));
+  const pitch = Math.min(52, Math.floor((h - 24) / perCol));
+  h = Math.min(h, perCol * pitch + 28);
+  const ops: Op[] = [panel(y, h)];
+  rows.forEach((r, i) => {
+    const col = i < perCol ? 0 : 1;
+    const row = i % perCol;
+    const x = 74 + col * 486;
+    const ry = y + 14 + row * pitch;
+    const colW = 452;
+    const dim = r.dim ? "#6a665e" : undefined;
+    ops.push({ t: "text", x, top: ry + (pitch - 24) / 2, lh: 24, text: clip(r.name, 18), size: 19, weight: 700, color: dim ?? TEXT });
+    if (r.sub) {
+      const nw = textWidth(clip(r.name, 18), 19) + 12;
+      ops.push({ t: "text", x: x + nw, top: ry + (pitch - 18) / 2 + 1, lh: 18, text: clip(r.sub, 24), size: 13, weight: 500, color: dim ?? MUTED });
+    }
+    ops.push({ t: "text", x: x + colW - 160, top: ry + (pitch - 24) / 2, lh: 24, text: r.big, size: 19, weight: 700, color: dim ?? TEXT, align: "right", w: 160 });
+    if (row < perCol - 1 && row < Math.ceil(rows.length / (col ? 1 : 1))) {
+      ops.push({ t: "rect", x, y: ry + pitch - 1, w: colW, h: 1, fill: HAIR });
+    }
+  });
+  if (rows.length > 1) ops.push({ t: "rect", x: 538, y: y + 18, w: 1, h: h - 36, fill: HAIR });
+  return ops;
+}
+
 
 function bars(
   rows: LeagueWeek["standings"],
@@ -179,17 +341,10 @@ function bars(
   return ops;
 }
 
-function stats(top: number, items: Array<[string, string]>): Op[] {
-  const xs = [56, 386, 716];
-  const ops: Op[] = [{ t: "rect", x: 56, y: top, w: 968, h: 2, fill: LINE }];
-  items.forEach(([value, label], i) => {
-    ops.push({ t: "text", x: xs[i], top: top + 26, lh: 84, text: value, size: 84, weight: 400, color: TEXT, serif: true });
-    ops.push({ t: "text", x: xs[i] + 4, top: top + 122, lh: 28, text: label, size: 22, weight: 500, color: MUTED });
-  });
-  return ops;
-}
 
-const plural = (n: number, one: string, many = `${one}s`) => (n === 1 ? one : many);
+// ---------------------------------------------------------------------------------------------
+// League week cards
+// ---------------------------------------------------------------------------------------------
 
 export function leagueCurrentOps(week: LeagueWeek): Op[] {
   const rows = week.standings;
@@ -205,17 +360,24 @@ export function leagueCurrentOps(week: LeagueWeek): Op[] {
     : second
     ? `by ${gap} ${plural(gap, "point")} this week`
     : "this week";
+  const size = nameSize(title, 108, 968);
   return [
-    ...frame("violet", week.label.toUpperCase(), title, sub),
-    ...kpis(380, [
+    ...frame({ theme: "violet", right: "LEAGUE · THIS WEEK", dateText: week.label.toUpperCase() }),
+    { t: "text", x: 56, top: 190, lh: size, text: title, size, weight: 700, color: TEXT, ls: -Math.round(size / 30) },
+    { t: "text", x: 58, top: 190 + size + 4, lh: 36, text: sub, size: 28, weight: 500, color: SOFT },
+    ...kpiStrip(380, [
       [String(leader?.points ?? 0), "leader points"],
       [`${week.daysPlayed}/7`, "days played"],
       [String(week.gamesCounted), "games counted"],
       [String(week.leadChanges), plural(week.leadChanges, "lead change")],
+    ], THEMES.violet.accent),
+    label(500, "Standings"),
+    ...bars(rows, 536, 76, 640, 64, leader?.points ?? 1),
+    ...pills([
+      ["Day", `${week.daysElapsed} of 7`],
+      ["Final", "Sunday night"],
+      ["Games", String(week.gamesCounted)],
     ]),
-    label(560, "Standings"),
-    ...bars(rows, 596, 76, 610, 64, leader?.points ?? 1),
-    ...pills([`Day ${week.daysElapsed} of 7`, "Final on Sunday night", "Fatherdle league"]),
   ];
 }
 
@@ -224,21 +386,29 @@ export function leagueFinalOps(week: LeagueWeek): Op[] {
   const winner = rows[0];
   const podium = rows.slice(0, 3);
   const rest = rows.slice(3);
+  const title = winner ? `${winner.name} won` : "No winner";
+  const size = nameSize(title, 108, 760);
   const ops: Op[] = [
-    ...frame(
-      "violet",
-      week.label.toUpperCase(),
-      winner ? `${winner.name} won` : "No winner",
-      winner ? `the league with ${winner.points} ${plural(winner.points, "point")}` : "No results this week"
-    ),
-    { t: "icon", x: 880, y: 196, size: 140, color: ACCENTS.violet[0], paths: TROPHY },
-    ...kpis(380, [
+    ...frame({ theme: "violet", right: "LEAGUE · FINAL", dateText: week.label.toUpperCase() }),
+    { t: "text", x: 56, top: 190, lh: size, text: title, size, weight: 700, color: TEXT, ls: -Math.round(size / 30) },
+    {
+      t: "text",
+      x: 58,
+      top: 190 + size + 4,
+      lh: 36,
+      text: winner ? `the league with ${winner.points} ${plural(winner.points, "point")}` : "No results this week",
+      size: 28,
+      weight: 500,
+      color: SOFT,
+    },
+    { t: "icon", x: 880, y: 196, size: 136, color: THEMES.violet.accent, paths: TROPHY },
+    ...kpiStrip(380, [
       [String(winner?.points ?? 0), "winning points"],
       [String(week.standings.length), "players"],
       [String(week.gamesCounted), "games counted"],
       [String(week.leadChanges), plural(week.leadChanges, "lead change")],
-    ]),
-    label(560, "Podium"),
+    ], THEMES.violet.accent),
+    label(500, "Podium"),
   ];
   // Staggered podium: best widest and tallest, bottom-aligned at y=900
   const slots = [
@@ -259,11 +429,183 @@ export function leagueFinalOps(week: LeagueWeek): Op[] {
   }
   if (rest.length) {
     ops.push(label(930, "Rest of the table"));
-    ops.push(...bars(rest.slice(0, 3), 966, 66, 250, 54, winner?.points ?? 1));
+    ops.push(...bars(rest.slice(0, 3), 966, 66, 220, 54, winner?.points ?? 1));
   }
-  ops.push(...pills([week.label, "Final results", "Fatherdle league"]));
+  ops.push(...pills([
+    ["Players", String(week.standings.length)],
+    ["Games", String(week.gamesCounted)],
+    ["Lead changes", String(week.leadChanges)],
+  ]));
   return ops;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Day (whole group)
+// ---------------------------------------------------------------------------------------------
+
+export interface GroupDayInput {
+  dateText: string; // e.g. "SUNDAY 23 NOV 2026"
+  counted: number;
+  pending: number;
+  pointsShared: number;
+  players: Array<{ name: string; color: string; points: number; firstPlaces: number; gamesPlayed: number; played: boolean }>;
+  games: Array<{ name: string; slug: string; submitted: number; of: number; counted: boolean; leader: string; result: string }>;
+}
+
+function attemptSegments(slug: string, result: string): GameTile["segments"] | undefined {
+  if (!["wordle", "flagle", "metrodle"].includes(slug)) return undefined;
+  const m = result.match(/(\d)\s*\/\s*6/);
+  if (!m) return { total: 6, on: [] };
+  const n = Number(m[1]);
+  return { total: 6, on: Array.from({ length: n }, (_, i) => i), strong: n - 1 };
+}
+
+export function groupDayOps(d: GroupDayInput): Op[] {
+  const ordered = [...d.games].sort((a, b) => b.submitted - a.submitted || Number(b.counted) - Number(a.counted));
+  const active = d.players.filter((p) => p.played);
+  const top = Math.max(1, ...d.players.map((p) => p.points));
+  const accent = THEMES.blue.accent;
+  const title = `${d.counted} ${plural(d.counted, "game")} counted`;
+  const ops: Op[] = [
+    ...frame({ theme: "blue", right: "DAY · ALL GAMES", dateText: d.dateText, title, titleSize: 84 }),
+    ...kpiStrip(278, [
+      [String(active.length), "players active"],
+      [String(d.counted), "games counted"],
+      [String(d.pending), "still pending"],
+      [String(d.pointsShared), "points shared"],
+    ], accent),
+    label(386, "Points today"),
+    panel(414, 346),
+  ];
+  const rows = d.players.slice(0, 6);
+  const pitch = Math.min(56, Math.floor(326 / Math.max(1, rows.length)));
+  rows.forEach((p, i) => {
+    const y = 426 + i * pitch;
+    const dim = !p.played;
+    ops.push({ t: "text", x: 74, top: y + (pitch - 20) / 2, lh: 20, text: dim ? "–" : String(i + 1), size: 14, weight: 700, color: MUTED });
+    ops.push(...avatar(110, y + (pitch - 40) / 2, 40, p.color, p.name, dim));
+    ops.push({ t: "text", x: 166, top: y + 3, lh: 28, text: clip(p.name, 12), size: 24, weight: 700, color: dim ? MUTED : TEXT });
+    ops.push({
+      t: "text",
+      x: 166,
+      top: y + 31,
+      lh: 16,
+      text: dim ? "pending" : `${p.firstPlaces}× 1st · ${p.gamesPlayed} ${plural(p.gamesPlayed, "game")}`,
+      size: 13,
+      weight: 500,
+      color: MUTED,
+    });
+    ops.push(...trackBar(292, y + (pitch - 22) / 2, 640, 22, dim ? 0 : p.points / top, p.color));
+    ops.push({ t: "text", x: 940, top: y + (pitch - 44) / 2, lh: 44, text: dim ? "—" : String(p.points), size: 42, weight: 400, color: dim ? MUTED : TEXT, serif: true, align: "right", w: 64 });
+  });
+  ops.push(label(786, "Games · most played first"));
+  ops.push(
+    ...topTiles(
+      ordered.slice(0, 3).map((g) => ({
+        name: g.name,
+        slug: g.slug,
+        big: g.result || `${g.submitted}/${g.of}`,
+        sub: `${g.leader ? `${g.leader} · ` : ""}${g.submitted} played`,
+        segments: attemptSegments(g.slug, g.result) ?? { total: Math.max(1, Math.min(6, g.of)), on: Array.from({ length: Math.min(6, g.submitted) }, (_, i) => i) },
+      })),
+      814,
+      118
+    )
+  );
+  ops.push(
+    ...compactList(
+      ordered.slice(3, 15).map((g) => ({
+        name: g.name,
+        sub: g.submitted ? `${g.leader ? g.leader + " · " : ""}${g.submitted} played` : `waiting for ${Math.max(1, Math.ceil(Math.max(1, active.length) / 2))}`,
+        big: g.submitted ? g.result || `${g.submitted}/${g.of}` : "—",
+        dim: g.submitted === 0 || !g.counted,
+      })),
+      942,
+      256
+    )
+  );
+  const top1 = [...d.players].sort((a, b) => b.points - a.points)[0];
+  const quiet = ordered.filter((g) => g.submitted === 0).map((g) => g.name)[0];
+  ops.push(
+    ...pills([
+      ["Most played", ordered[0] ? clip(ordered[0].name, 12) : "–"],
+      ["Top scorer", top1 && top1.points > 0 ? `${top1.name} · ${top1.points}` : "–"],
+      ["Quiet game", quiet ?? "none"],
+    ])
+  );
+  return ops;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Player · day
+// ---------------------------------------------------------------------------------------------
+
+export interface PlayerDayInput {
+  name: string;
+  dateText: string;
+  rank: number;
+  points: number;
+  rows: Array<{ name: string; slug: string; placement: number; outOf: number; points: number; counts: boolean; result: string }>;
+  gamesTotal: number;
+}
+
+export function playerDayOps(d: PlayerDayInput): Op[] {
+  const accent = THEMES.pink.accent;
+  const wins = d.rows.filter((r) => r.placement === 1).length;
+  const ordered = [...d.rows].sort((a, b) => a.placement - b.placement || b.outOf - a.outOf);
+  const nsize = nameSize(d.name, 150, 560);
+  const ops: Op[] = [
+    ...frame({ theme: "pink", right: "PLAYER · DAY", dateText: d.dateText }),
+    { t: "text", x: 54, top: 176, lh: nsize, text: d.name, size: nsize, weight: 700, color: TEXT, ls: -Math.round(nsize / 24) },
+    { t: "text", x: 560, top: 196, lh: 112, text: `${ordinalOf(d.rank)} · ${d.points}`, size: 100, weight: 400, color: TEXT, serif: true, align: "right", w: 380 },
+    { t: "text", x: 950, top: 254, lh: 26, text: plural(d.points, "point"), size: 22, weight: 600, color: SOFT },
+    ...kpiStrip(338, [
+      [ordinalOf(d.rank), "today's position"],
+      [`${d.rows.length} / ${d.gamesTotal}`, "games played"],
+      [String(wins), plural(wins, "first place")],
+      [String(d.rows.filter((r) => r.counts).length), "counted today"],
+    ], accent),
+    label(450, "Every game · best first"),
+  ];
+  ops.push(
+    ...topTiles(
+      ordered.slice(0, 3).map((r) => ({
+        name: r.name,
+        slug: r.slug,
+        big: r.result || ordinalOf(r.placement),
+        tag: ordinalOf(r.placement).toUpperCase(),
+        sub: `of ${r.outOf}${r.counts ? ` · +${r.points}` : " · pending"}`,
+        segments: attemptSegments(r.slug, r.result),
+      })),
+      482,
+      172
+    )
+  );
+  ops.push(
+    ...compactList(
+      ordered.slice(3, 15).map((r) => ({
+        name: r.name,
+        sub: `${ordinalOf(r.placement)} of ${r.outOf}`,
+        big: r.result || "—",
+        dim: !r.counts,
+      })),
+      668,
+      520
+    )
+  );
+  ops.push(
+    ...pills([
+      ["Best", ordered[0] ? clip(ordered[0].name, 12) : "–"],
+      ["Points", String(d.points)],
+      ["Played", `${d.rows.length} of ${d.gamesTotal}`],
+    ])
+  );
+  return ops;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Player · week / range
+// ---------------------------------------------------------------------------------------------
 
 export interface PlayerStatsInput {
   name: string;
@@ -273,232 +615,138 @@ export interface PlayerStatsInput {
   qualifiedGames: number;
   firstPlaces: number;
   averagePlacement: number | null;
+  positionChange: number | null;
   periodLabel: string;
-  games: Array<{ name: string; color: string; points: number; slug?: string }>;
+  daily: Array<{ label: string; value: number }>;
+  games: Array<{ name: string; color: string; points: number; slug?: string; best?: string; place?: string }>;
 }
 
-const ordinalOf = (n: number) => {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
-
-/** A player's statistics for a period: KPIs plus game tiles sized by result. */
 export function playerStatsOps(p: PlayerStatsInput): Op[] {
+  const accent = THEMES.orange.accent;
+  const nsize = nameSize(p.name, 170, 560);
+  const change = p.positionChange;
   const ops: Op[] = [
-    ...frame("orange", p.periodLabel.toUpperCase(), p.name, `${ordinalOf(p.rank)} place · ${p.points} ${plural(p.points, "point")}`, 120),
-    ...kpis(380, [
-      [ordinalOf(p.rank), "league position"],
-      [String(p.points), "points"],
-      [String(p.firstPlaces), p.firstPlaces === 1 ? "first place" : "first places"],
+    ...frame({ theme: "orange", right: "PLAYER · WRAPPED", dateText: p.periodLabel.toUpperCase() }),
+    { t: "text", x: 54, top: 170, lh: nsize, text: p.name, size: nsize, weight: 700, color: TEXT, ls: -Math.round(nsize / 24) },
+    { t: "text", x: 540, top: 196, lh: 112, text: `${ordinalOf(p.rank)} · ${p.points}`, size: 100, weight: 400, color: TEXT, serif: true, align: "right", w: 400 },
+    { t: "text", x: 950, top: 254, lh: 26, text: plural(p.points, "point"), size: 22, weight: 600, color: SOFT },
+    ...kpiStrip(334, [
+      [change === null || change === 0 ? "–" : change > 0 ? `+${change}` : String(change), "place vs last period"],
+      [String(p.qualifiedGames), "games counted"],
+      [String(p.firstPlaces), plural(p.firstPlaces, "first place")],
       [p.averagePlacement ? p.averagePlacement.toFixed(1) : "–", "average place"],
-    ]),
-    label(560, "Points by game"),
+    ], accent),
   ];
-  const games = p.games.slice(0, 12);
-  // Top three: staggered podium row with game gradients, bottom-aligned at y=860
-  const tops = games.slice(0, 3);
-  const widths = [380, 300, 252];
-  const heights = [250, 205, 160];
-  let x = 56;
-  tops.forEach((g, i) => {
-    const top = 860 - heights[i];
-    const icon = g.slug ? GAME_ICON[g.slug] : undefined;
-    ops.push({ t: "rect", x, y: top, w: widths[i], h: heights[i], fill: g.color, grad: icon ? [icon.from, icon.to] : undefined, r: 24 });
-    ops.push({ t: "text", x: x + 22, top: top + 18, lh: 30, text: g.name.length > 14 ? g.name.slice(0, 13) + "…" : g.name, size: 24, weight: 700, color: icon?.fg ?? INK });
-    ops.push({ t: "text", x: x + 22, top: top + heights[i] - 90, lh: 76, text: String(g.points), size: 76, weight: 400, color: icon?.fg ?? INK, serif: true });
-    x += widths[i] + 12;
-  });
-  // Everything else: plain dark tiles, two columns
-  const rest = games.slice(3);
-  rest.forEach((g, i) => {
-    const col = i % 3;
-    const row = Math.floor(i / 3);
-    const w = 312;
-    const tx = 56 + col * (w + 16);
-    const ty = 884 + row * 104;
-    ops.push({ t: "rect", x: tx, y: ty, w, h: 92, fill: SURFACE, r: 18 });
-    ops.push({ t: "text", x: tx + 20, top: ty + 14, lh: 26, text: g.name.length > 13 ? g.name.slice(0, 12) + "…" : g.name, size: 20, weight: 600, color: MUTED });
-    ops.push({ t: "text", x: tx + 20, top: ty + 38, lh: 48, text: String(g.points), size: 48, weight: 400, color: TEXT, serif: true });
-  });
-  if (games.length === 0) {
-    ops.push({ t: "text", x: 56, top: 600, lh: 32, text: "No points yet this period.", size: 26, weight: 500, color: MUTED });
-  }
-  ops.push(...pills([`${p.qualifiedGames} games counted`, p.periodLabel, "Fatherdle league"]));
-  return ops;
-}
-
-interface GameTile {
-  name: string;
-  slug?: string;
-  big: string; // serif value
-  sub?: string;
-  dim?: boolean;
-}
-
-/** Game tiles sized by result: top three form a staggered, bottom-aligned podium row with the game
- *  gradients; everything else is a plain dark tile in two smaller tiers; dimmed tiles are smallest. */
-function gameTiles(tiles: GameTile[], top: number, bottom: number, k = 1): Op[] {
-  const ops: Op[] = [];
-  const podium = tiles.filter((t) => !t.dim).slice(0, 3);
-  const rest = tiles.filter((t) => !podium.includes(t));
-  const widths = [380, 300, 252];
-  const heights = [230, 188, 150].map((h) => Math.round(h * k));
-  const baseY = top + heights[0];
-  let x = 56;
-  podium.forEach((t, i) => {
-    const y = baseY - heights[i];
-    const icon = t.slug ? GAME_ICON[t.slug] : undefined;
-    const fg = icon?.fg ?? INK;
-    ops.push({ t: "rect", x, y, w: widths[i], h: heights[i], fill: icon?.from ?? "#E6EB5E", grad: icon ? [icon.from, icon.to] : undefined, r: 24 });
-    ops.push({ t: "text", x: x + 22, top: y + 18, lh: 30, text: clip(t.name, i === 0 ? 20 : 15), size: 24, weight: 700, color: fg });
-    const bigS = Math.max(30, Math.min(68, heights[i] - 92));
-    ops.push({ t: "text", x: x + 22, top: y + heights[i] - bigS - 42, lh: bigS, text: t.big, size: bigS, weight: 400, color: fg, serif: true });
-    if (t.sub) ops.push({ t: "text", x: x + 24, top: y + heights[i] - 40, lh: 24, text: t.sub, size: 19, weight: 600, color: fg });
-    x += widths[i] + 12;
-  });
-  // Plain tiles: first tier 3 across, second tier 4 across, shrinking to fit the space left
-  const avail = bottom - (baseY + 20);
-  const tier1 = rest.filter((t) => !t.dim).slice(0, 3);
-  const tier2 = rest.filter((t) => !tier1.includes(t));
-  let y = baseY + 20;
-  const place = (list: GameTile[], perRow: number, h: number, nameSize: number, bigSize: number) => {
-    const w = Math.floor((968 - (perRow - 1) * 12) / perRow);
-    list.forEach((t, i) => {
-      const col = i % perRow;
-      const row = Math.floor(i / perRow);
-      const tx = 56 + col * (w + 12);
-      const ty = y + row * (h + 12);
-      if (ty + h > bottom) return;
-      ops.push({ t: "rect", x: tx, y: ty, w, h, fill: SURFACE, r: 16 });
-      ops.push({ t: "text", x: tx + 16, top: ty + 8, lh: nameSize + 4, text: clip(t.name, perRow === 3 ? 16 : 13), size: nameSize, weight: 600, color: t.dim ? "#5d5a52" : MUTED });
-      ops.push({ t: "text", x: tx + 16, top: ty + h - bigSize - 8, lh: bigSize, text: t.big, size: bigSize, weight: 400, color: t.dim ? "#5d5a52" : TEXT, serif: true });
+  // Points each day
+  const daily = p.daily.slice(-10);
+  if (daily.length) {
+    ops.push(panel(442, 194));
+    ops.push({ t: "text", x: 80, top: 462, lh: 20, text: "POINTS EACH DAY", size: 16, weight: 700, color: SOFT, ls: 3 });
+    const max = Math.max(1, ...daily.map((d) => d.value));
+    const avg = daily.reduce((a, d) => a + d.value, 0) / daily.length;
+    const bw = Math.floor((968 - 48 - (daily.length - 1) * 12) / daily.length);
+    daily.forEach((d, i) => {
+      const bx = 80 + i * (bw + 12);
+      const h = Math.max(6, Math.round((d.value / max) * 62));
+      const hi = d.value >= avg && d.value > 0;
+      ops.push({ t: "rect", x: bx, y: 570 - h, w: bw, h, fill: hi ? "#E6EB5E" : "#FFFFFF26", r: [6, 6, 0, 0] });
+      ops.push({ t: "text", x: bx, top: 570 - h - 22, lh: 18, text: String(d.value), size: 15, weight: 700, color: hi ? "#E6EB5E" : SOFT, align: "center", w: bw });
+      ops.push({ t: "text", x: bx, top: 580, lh: 18, text: d.label, size: 15, weight: 500, color: SOFT, align: "center", w: bw });
     });
-    y += Math.ceil(list.length / perRow) * (h + 12);
-  };
-  void avail;
-  place(tier1, 3, k < 1 ? 80 : 88, 18, 38);
-  if (tier2.length) place(tier2, 5, k < 1 ? 56 : 64, 14, 26);
-  return ops;
-}
-
-const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
-
-export interface GroupDayInput {
-  dateLabel: string;
-  counted: number;
-  totalGames: number;
-  players: LeagueWeek["standings"];
-  games: Array<{ name: string; slug: string; submitted: number; of: number; counted: boolean }>;
-}
-
-/** The whole group's day: points today and every game ordered by turnout. */
-export function groupDayOps(d: GroupDayInput): Op[] {
-  const leader = d.players[0];
-  const ordered = [...d.games].sort((a, b) => b.submitted - a.submitted);
-  return [
-    ...frame("blue", d.dateLabel, "Today’s table", `${d.counted} ${plural(d.counted, "game")} counted`),
-    ...kpis(380, [
-      [String(d.players.filter((p) => p.played).length), "players today"],
-      [String(d.counted), "games counted"],
-      [String(ordered.filter((g) => g.submitted > 0).length), "games played"],
-      [String(leader && leader.points > 0 ? leader.points : 0), "top score"],
-    ]),
-    label(550, "Points today"),
-    ...bars(d.players.filter((p) => p.played).slice(0, 3), 584, 50, 150, 42, leader?.points ?? 1),
-    label(752, "Games by turnout"),
-    ...gameTiles(
-      ordered.map((g) => ({
+  }
+  const gy = daily.length ? 666 : 450;
+  ops.push(label(gy, "Best result in each game"));
+  const games = p.games.slice(0, 15);
+  ops.push(
+    ...topTiles(
+      games.slice(0, 3).map((g) => ({
         name: g.name,
         slug: g.slug,
-        big: `${g.submitted}/${g.of}`,
-        sub: g.counted ? "counted" : g.submitted ? "pending" : "",
-        dim: g.submitted === 0,
+        big: g.best || String(g.points),
+        tag: g.place ? g.place.toUpperCase() : undefined,
+        sub: `${g.points} pts`,
+        segments: g.slug && g.best ? attemptSegments(g.slug, g.best) : undefined,
       })),
-      788,
-      1232,
-      0.85
-    ),
-    ...pills([d.dateLabel, `${d.counted} counted`, "Fatherdle league"]),
-  ];
+      gy + 30,
+      152
+    )
+  );
+  ops.push(
+    ...compactList(
+      games.slice(3).map((g) => ({ name: g.name, sub: g.place ?? "", big: g.best || `${g.points} pts` })),
+      gy + 194,
+      1196 - (gy + 194)
+    )
+  );
+  const best = games[0];
+  ops.push(
+    ...pills([
+      ["Best game", best ? clip(best.name, 12) : "–"],
+      ["Points", String(p.points)],
+      ["Period", clip(p.periodLabel, 12)],
+    ])
+  );
+  return ops;
 }
 
-export interface PlayerDayInput {
-  name: string;
-  dateLabel: string;
-  rank: number;
-  points: number;
-  rows: Array<{ name: string; slug: string; placement: number; outOf: number; points: number; counts: boolean }>;
-  gamesTotal: number;
-}
-
-export function playerDayOps(d: PlayerDayInput): Op[] {
-  const best = d.rows.filter((r) => r.placement === 1).length;
-  const ordered = [...d.rows].sort((a, b) => a.placement - b.placement || b.outOf - a.outOf);
-  return [
-    ...frame("pink", d.dateLabel, d.name, `${ordinalOf(d.rank)} place · ${d.points} ${plural(d.points, "point")} today`, 120),
-    ...kpis(380, [
-      [ordinalOf(d.rank), "today’s position"],
-      [String(d.points), "points"],
-      [String(d.rows.length), "games played"],
-      [String(best), best === 1 ? "first place" : "first places"],
-    ]),
-    label(550, "Every game"),
-    ...gameTiles(
-      ordered.map((r) => ({
-        name: r.name,
-        slug: r.slug,
-        big: ordinalOf(r.placement),
-        sub: `of ${r.outOf}${r.counts ? ` · +${r.points}` : " · pending"}`,
-      })),
-      586,
-      1232
-    ),
-    ...pills([d.dateLabel, `${d.rows.length} of ${d.gamesTotal} played`, "Fatherdle league"]),
-  ];
-}
+// ---------------------------------------------------------------------------------------------
+// Game
+// ---------------------------------------------------------------------------------------------
 
 export interface GameCardInput {
   name: string;
   slug: string;
   rangeLabel: string;
   kpis: Array<[string, string]>;
-  leaderboard: Array<{ name: string; color: string; result: string; points: number }>;
-  leaderboardLabel?: string;
-  footer?: string[];
-  distribution: { title: string; bars: Array<{ label: string; value: number }> } | null;
+  boardLabel: string;
+  leaderboard: Array<{ name: string; color: string; value: string; note?: string; ratio: number }>;
+  distributionLabel: string;
+  distribution: Array<{ label: string; value: number; color?: string }> | null;
+  footer: Array<[string, string]>;
 }
 
 export function gameCardOps(d: GameCardInput): Op[] {
   const icon = GAME_ICON[d.slug];
+  const theme: Accent = "yellow";
+  const accent = THEMES[theme].accent;
+  const size = nameSize(d.name, 150, 968);
   const ops: Op[] = [
-    ...frame("yellow", d.rangeLabel.toUpperCase(), d.name, "game leaderboard", 108),
-    ...kpis(380, d.kpis.slice(0, 4) as Array<[string, string]>),
-    label(560, d.leaderboardLabel ?? "Leaderboard"),
+    ...frame({ theme, right: `GAME · ${d.name.toUpperCase()}`, dateText: d.rangeLabel.toUpperCase() }),
+    { t: "text", x: 54, top: 190, lh: size, text: d.name, size, weight: 700, color: TEXT, ls: -Math.round(size / 24) },
+    ...kpiStrip(376, d.kpis, accent),
+    label(506, d.boardLabel),
   ];
   const rows = d.leaderboard.slice(0, 6);
-  const max = Math.max(1, ...rows.map((r) => r.points));
+  const pitch = 46;
+  ops.push(panel(534, rows.length * pitch + 24));
   rows.forEach((r, i) => {
-    const y = 596 + i * 60;
-    const w = Math.max(360, Math.round((r.points / max) * 968));
-    ops.push({ t: "rect", x: 56, y, w, h: 50, fill: r.color, r: 12 });
-    ops.push({ t: "text", x: 76, top: y + 8, lh: 34, text: r.name, size: 26, weight: 700, color: INK });
-    ops.push({ t: "text", x: 56 + w - 20 - 240, top: y + 6, lh: 38, text: r.result, size: 34, weight: 400, color: INK, serif: true, align: "right", w: 240 });
+    const y = 546 + i * pitch;
+    ops.push({ t: "text", x: 74, top: y + (pitch - 20) / 2, lh: 20, text: String(i + 1), size: 14, weight: 700, color: MUTED });
+    ops.push(...avatar(108, y + 3, 40, r.color, r.name));
+    ops.push({ t: "text", x: 162, top: y + (pitch - 28) / 2, lh: 28, text: clip(r.name, 10), size: 22, weight: 700, color: TEXT });
+    ops.push(...trackBar(300, y + (pitch - 18) / 2, 450, 18, r.ratio, r.color));
+    if (r.note) ops.push({ t: "text", x: 760, top: y + (pitch - 18) / 2, lh: 18, text: r.note, size: 13, weight: 500, color: MUTED, align: "right", w: 140 });
+    ops.push({ t: "text", x: 920, top: y + (pitch - 38) / 2, lh: 38, text: r.value, size: 36, weight: 400, color: TEXT, serif: true, align: "right", w: 84 });
   });
-  if (d.distribution) {
-    ops.push(label(980, d.distribution.title));
-    const bars = d.distribution.bars.slice(0, 11);
-    const max2 = Math.max(1, ...bars.map((b) => b.value));
-    const bw = Math.floor((968 - (bars.length - 1) * 10) / bars.length);
-    bars.forEach((b, i) => {
-      const h = Math.max(6, Math.round((b.value / max2) * 150));
-      const x = 56 + i * (bw + 10);
-      ops.push({ t: "rect", x, y: 1190 - h, w: bw, h, fill: icon?.from ?? "#FFD93D", grad: icon ? [icon.from, icon.to] : undefined, r: [8, 8, 0, 0] });
-      ops.push({ t: "text", x, top: 1196, lh: 22, text: b.label, size: 17, weight: 600, color: MUTED, align: "right", w: bw });
-      if (b.value) ops.push({ t: "text", x, top: 1190 - h - 26, lh: 22, text: String(b.value), size: 18, weight: 700, color: TEXT, align: "right", w: bw });
+  const distTop = 534 + rows.length * pitch + 24 + 30;
+  if (d.distribution && d.distribution.length) {
+    ops.push(label(distTop, d.distributionLabel));
+    const ph = 1196 - (distTop + 30);
+    ops.push(panel(distTop + 28, ph));
+    const bars2 = d.distribution.slice(0, 11);
+    const max = Math.max(1, ...bars2.map((b) => b.value));
+    const bw = Math.floor((968 - 48 - (bars2.length - 1) * 12) / bars2.length);
+    const area = ph - 90;
+    bars2.forEach((b, i) => {
+      const h = Math.max(6, Math.round((b.value / max) * area));
+      const x = 80 + i * (bw + 12);
+      const base = distTop + 28 + ph - 44;
+      ops.push({ t: "rect", x, y: base - h, w: bw, h, fill: b.color ?? icon?.from ?? "#FFD93D", r: [8, 8, 0, 0] });
+      ops.push({ t: "text", x, top: base - h - 26, lh: 22, text: String(b.value), size: 19, weight: 700, color: TEXT, align: "center", w: bw });
+      ops.push({ t: "text", x, top: base + 10, lh: 22, text: b.label, size: 18, weight: 500, color: SOFT, align: "center", w: bw });
     });
   }
-  ops.push(...pills(d.footer ?? [d.rangeLabel, `${d.leaderboard.length} ${plural(d.leaderboard.length, "player")}`, "Fatherdle league"]));
+  ops.push(...pills(d.footer));
   return ops;
 }
 
@@ -513,6 +761,26 @@ function roundedRect(ctx: CanvasRenderingContext2D, op: Extract<Op, { t: "rect" 
   ctx.fill();
 }
 
+function drawMesh(ctx: CanvasRenderingContext2D, op: Extract<Op, { t: "rect" }>) {
+  const cols = op.mesh!;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(op.x, op.y, op.w, op.h);
+  ctx.clip();
+  // Nine soft blobs on a 3x3 grid blend into one smooth mesh
+  const rad = Math.max(op.w, op.h) * 0.62;
+  cols.forEach((c, i) => {
+    const cx = op.x + ((i % 3) / 2) * op.w;
+    const cy = op.y + (Math.floor(i / 3) / 2) * op.h;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    g.addColorStop(0, c);
+    g.addColorStop(1, c + "00");
+    ctx.fillStyle = g;
+    ctx.fillRect(op.x, op.y, op.w, op.h);
+  });
+  ctx.restore();
+}
+
 export function drawOps(ctx: CanvasRenderingContext2D, ops: Op[]) {
   ctx.textBaseline = "middle";
   for (const op of ops) {
@@ -523,20 +791,37 @@ export function drawOps(ctx: CanvasRenderingContext2D, ops: Op[]) {
       ctx.rotate((rot.rot! * Math.PI) / 180);
       ctx.translate(-rot.pivot![0], -rot.pivot![1]);
     }
-    if (op.t === "rect") {
+    if (op.t === "rect" && op.halo) {
+      ctx.beginPath();
+      if (op.r === undefined) ctx.rect(op.x, op.y, op.w, op.h);
+      else ctx.roundRect(op.x, op.y, op.w, op.h, op.r);
+      ctx.save();
+      ctx.translate(op.x + op.w / 2, op.y + op.h / 2);
+      ctx.scale((op.w / 2) * Math.SQRT2, (op.h / 2) * Math.SQRT2);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      g.addColorStop(0, op.halo[0]);
+      g.addColorStop(0.42, op.halo[0]);
+      g.addColorStop(1, op.halo[1]);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.restore();
+    } else if (op.t === "rect") {
       if (op.grad) {
         const g = ctx.createLinearGradient(op.x, 0, op.x + op.w, 0);
         g.addColorStop(0, op.grad[0]);
         g.addColorStop(1, op.grad[1]);
         ctx.fillStyle = g;
-      } else if (op.fade) {
-        const g = ctx.createLinearGradient(0, op.y, 0, op.y + op.h);
-        g.addColorStop(0, op.fade);
-        g.addColorStop(0.55, op.fill);
-        g.addColorStop(1, op.fill);
-        ctx.fillStyle = g;
       } else ctx.fillStyle = op.fill;
       roundedRect(ctx, op);
+      if (op.mesh) drawMesh(ctx, op);
+      if (op.stroke) {
+        ctx.strokeStyle = op.stroke;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (op.r === undefined) ctx.rect(op.x + 0.5, op.y + 0.5, op.w - 1, op.h - 1);
+        else ctx.roundRect(op.x + 0.5, op.y + 0.5, op.w - 1, op.h - 1, op.r);
+        ctx.stroke();
+      }
     } else if (op.t === "circle") {
       ctx.fillStyle = op.fill;
       ctx.beginPath();
@@ -549,6 +834,9 @@ export function drawOps(ctx: CanvasRenderingContext2D, ops: Op[]) {
       if (op.align === "right") {
         ctx.textAlign = "right";
         ctx.fillText(op.text, op.x + (op.w ?? 0), op.top + op.lh / 2);
+      } else if (op.align === "center") {
+        ctx.textAlign = "center";
+        ctx.fillText(op.text, op.x + (op.w ?? 0) / 2, op.top + op.lh / 2);
       } else {
         ctx.textAlign = "left";
         ctx.fillText(op.text, op.x, op.top + op.lh / 2);

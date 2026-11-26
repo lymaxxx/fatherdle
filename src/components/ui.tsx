@@ -3,8 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { GameSlug } from "@/lib/types";
 
-import { GAME_ICON, gameGradient } from "@/lib/game-icons";
-export { GAME_ICON, gameGradient };
+import { GAME_ICON, gameGradient, gameHalo } from "@/lib/game-icons";
+export { GAME_ICON, gameGradient, gameHalo };
 
 export function GameIcon({ slug, size = 36, className = "" }: { slug: GameSlug | string; size?: number; className?: string }) {
   const g = GAME_ICON[slug] ?? { code: slug.slice(0, 2).toUpperCase(), from: "#E6EB5E", to: "#8A8C45" };
@@ -16,7 +16,7 @@ export function GameIcon({ slug, size = 36, className = "" }: { slug: GameSlug |
         width: size,
         height: size,
         borderRadius: size * 0.3,
-        background: `radial-gradient(circle at 20% 15%, ${g.from}, ${g.to})`,
+        background: gameHalo(slug, "circle"),
         color: g.fg ?? "#121212",
         fontSize: fs,
         lineHeight: 1,
