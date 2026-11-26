@@ -1,4 +1,4 @@
-import type { Submission } from "../types";
+import type { Player, Submission } from "../types";
 
 export interface GameStatsBar {
   label: string;
@@ -8,8 +8,15 @@ export interface GameStatsBar {
 
 export interface GameStatsPanel {
   results: number;
+  values: number[]; // solved primary values (capped), for density curves
   kpis: Array<{ label: string; value: string; sub?: string }>;
   distributions: Array<{ title: string; note?: string; kind?: "rows"; bars: GameStatsBar[] }>;
+  connections?: {
+    solveOrder: Array<{ name: string; color: string; order: string[]; purpleFirst: number; reverse: number }>;
+    mistakes: Array<{ name: string; color: string; avg: number; failPct: number }>;
+    groupAvg: number;
+    zeroPct: number;
+  };
   tiles: Array<{ label: string; value: string; sub?: string }>;
 }
 
@@ -34,7 +41,7 @@ function bucketed(values: number[], edges: number[], unit = ""): Array<{ label: 
   });
 }
 
-function attemptsPanel(subs: Submission[], extra: GameStatsPanel["tiles"] = []): Omit<GameStatsPanel, "results"> {
+function attemptsPanel(subs: Submission[], extra: GameStatsPanel["tiles"] = []): Omit<GameStatsPanel, "results" | "values"> {
   const solved = subs.filter((s) => !s.failed);
   const dist = histogram(solved.map((s) => s.primaryValue), ["1", "2", "3", "4", "5", "6"], 1);
   dist.push({ label: "Fail", value: subs.filter((s) => s.failed).length });
@@ -49,7 +56,7 @@ function attemptsPanel(subs: Submission[], extra: GameStatsPanel["tiles"] = []):
   };
 }
 
-function scorePanel(subs: Submission[], edges: number[], unit: string, scoreLabel: string, higherBetter = true, extra: GameStatsPanel["tiles"] = []): Omit<GameStatsPanel, "results"> {
+function scorePanel(subs: Submission[], edges: number[], unit: string, scoreLabel: string, higherBetter = true, extra: GameStatsPanel["tiles"] = []): Omit<GameStatsPanel, "results" | "values"> {
   const v = subs.filter((s) => !s.failed).map((s) => s.primaryValue);
   const best = v.length ? (higherBetter ? Math.max(...v) : Math.min(...v)) : null;
   return {
@@ -74,15 +81,17 @@ function evenEdges(values: number[], n = 6): number[] {
 
 const COLOURS: Record<string, string> = { "🟨": "Yellow", "🟩": "Green", "🟦": "Blue", "🟪": "Purple" };
 
-export function buildGameStats(slug: string, subs: Submission[]): GameStatsPanel {
+export function buildGameStats(slug: string, subs: Submission[], players: Player[] = []): GameStatsPanel {
   const panels = buildPanels(slug, subs);
   if (panels.kpis.length < 3) {
     panels.kpis.push({ label: "players", value: String(new Set(subs.map((s) => s.playerId)).size) });
   }
-  return { results: subs.length, ...panels };
+  const values = subs.filter((x) => !x.failed).map((x) => x.primaryValue).slice(-400);
+  const extra: Partial<GameStatsPanel> = slug === "connections" && players.length ? { connections: connectionsExtra(subs, players) } : {};
+  return { results: subs.length, values, ...panels, ...extra };
 }
 
-function buildPanels(slug: string, subs: Submission[]): Omit<GameStatsPanel, "results"> {
+function buildPanels(slug: string, subs: Submission[]): Omit<GameStatsPanel, "results" | "values"> {
   const nums = subs.filter((s) => !s.failed).map((s) => s.primaryValue);
   switch (slug) {
     case "wordle": {
@@ -232,4 +241,51 @@ function buildPanels(slug: string, subs: Submission[]): Omit<GameStatsPanel, "re
     default:
       return scorePanel(subs, evenEdges(nums), "", "score", true);
   }
+}
+
+const COLOUR_KEY: Record<string, string> = { "🟨": "Y", "🟩": "G", "🟦": "B", "🟪": "P" };
+
+function connectionsExtra(subs: Submission[], players: Player[]): NonNullable<GameStatsPanel["connections"]> {
+  const solveOrder: NonNullable<GameStatsPanel["connections"]>["solveOrder"] = [];
+  const mistakes: NonNullable<GameStatsPanel["connections"]>["mistakes"] = [];
+  for (const p of players) {
+    const mine = subs.filter((x) => x.playerId === p.id);
+    if (!mine.length) continue;
+    const pos: Record<string, { sum: number; n: number }> = {};
+    let purpleFirst = 0;
+    let reverse = 0;
+    for (const x of mine) {
+      const seq = rows(x.rawText)
+        .filter((l) => /^[🟨🟩🟦🟪]{4}$/u.test(l) && new Set([...l]).size === 1)
+        .map((l) => COLOUR_KEY[[...l][0]]);
+      seq.forEach((c, i) => {
+        const e = pos[c] ?? { sum: 0, n: 0 };
+        e.sum += i;
+        e.n++;
+        pos[c] = e;
+      });
+      if (seq[0] === "P") purpleFirst++;
+      if (seq.length === 4 && seq.join("") === "PBGY") reverse++;
+    }
+    const order = Object.entries(pos)
+      .sort((a, b) => a[1].sum / a[1].n - b[1].sum / b[1].n)
+      .map(([c]) => c);
+    solveOrder.push({ name: p.name, color: p.color, order, purpleFirst, reverse });
+    const solved = mine.filter((x) => !x.failed);
+    mistakes.push({
+      name: p.name,
+      color: p.color,
+      avg: solved.length ? avg(solved.map((x) => x.primaryValue)) : 0,
+      failPct: Math.round((mine.filter((x) => x.failed).length / mine.length) * 100),
+    });
+  }
+  solveOrder.sort((a, b) => b.purpleFirst - a.purpleFirst || b.reverse - a.reverse);
+  mistakes.sort((a, b) => a.avg - b.avg);
+  const solvedAll = subs.filter((x) => !x.failed);
+  return {
+    solveOrder: solveOrder.slice(0, 6),
+    mistakes: mistakes.slice(0, 6),
+    groupAvg: solvedAll.length ? avg(solvedAll.map((x) => x.primaryValue)) : 0,
+    zeroPct: subs.length ? Math.round((solvedAll.filter((x) => x.primaryValue === 0).length / subs.length) * 100) : 0,
+  };
 }

@@ -406,6 +406,34 @@ function ResultMenu({ item, actions }: { item: FeedResultItem; actions: FeedActi
 }
 
 const WIDE_GRAPHIC: GameSlug[] = ["geoguessr", "flagcognito"];
+const COMPARE_GAMES: GameSlug[] = ["wordle", "flagle", "metrodle", "strands", "connections", "catfishing", "poople"];
+
+/** Compact "today's group" panel so the middle of the card is never empty. */
+function GroupCompare({ item }: { item: FeedResultItem }) {
+  if (!item.compare || !COMPARE_GAMES.includes(item.gameSlug)) return null;
+  const rows = item.compare.slice(0, 5);
+  return (
+    <div className="hidden md:block shrink-0 min-w-[170px] max-w-[230px] flex-1 rounded-[14px] bg-bg/60 px-4 py-3">
+      <div className="text-[10px] font-bold tracking-[1.5px] uppercase text-muted mb-1.5">
+        {item.date === "" ? "" : "Today’s"} {gameOf(item.gameSlug).name}
+      </div>
+      <div className="space-y-1">
+        {rows.map((r) => (
+          <div key={r.playerId} className="flex items-center gap-2 text-[12px]">
+            <span style={{ backgroundColor: r.color }} className="w-1.5 h-1.5 rounded-full shrink-0" />
+            <span className={`flex-1 truncate ${r.playerId === item.playerId ? "font-bold" : "text-muted"}`} style={r.playerId === item.playerId ? { color: r.color } : undefined}>
+              {r.name}
+            </span>
+            <span className={`tabular-nums ${r.playerId === item.playerId ? "font-bold" : "text-muted"}`} style={r.playerId === item.playerId ? { color: r.color } : undefined}>
+              {r.result}
+            </span>
+          </div>
+        ))}
+        {item.compare.length > rows.length && <div className="text-[11px] text-muted">+{item.compare.length - rows.length} more</div>}
+      </div>
+    </div>
+  );
+}
 
 function ResultCard({
   item,
@@ -449,9 +477,10 @@ function ResultCard({
       </div>
 
       <div className={`flex gap-4 ${wide ? "flex-col" : "items-center justify-between"}`}>
-        <div className={`min-w-0 ${wide ? "" : "flex-1 overflow-hidden"}`}>
+        <div className={`min-w-0 ${wide ? "" : "overflow-hidden"} ${!wide && item.compare && COMPARE_GAMES.includes(item.gameSlug) ? "" : wide ? "" : "flex-1"}`}>
           <Graphic item={item} reveal={reveal} />
         </div>
+        {!wide && <GroupCompare item={item} />}
         <div className={`text-right shrink-0 max-w-[45%] ${wide ? "self-end" : ""}`}>
           <div className="font-serif text-[40px] md:text-[48px] xl:text-[56px] leading-[0.95] tracking-[-1px] whitespace-nowrap">
             {item.displayResult}

@@ -109,3 +109,7 @@
   .chart-bar:hover { filter: none; }
   .btn-primary:active, .btn-secondary:active { transform: scale(0.97); opacity: 0.85; }
 }
+@keyframes draw-line { from { stroke-dasharray: 600; stroke-dashoffset: 600; } to { stroke-dasharray: 600; stroke-dashoffset: 0; } }
+.draw-line { animation: draw-line 450ms var(--ease-out) both; }
+@keyframes fade-in-late { from { opacity: 0; } to { opacity: 1; } }
+.fade-in-late { animation: fade-in-late 250ms ease-out 450ms both; }

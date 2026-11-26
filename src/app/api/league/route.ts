@@ -251,7 +251,8 @@ export async function GET(req: NextRequest) {
           validGameSlug,
           allSubmissions.filter(
             (s) => s.gameSlug === validGameSlug && s.leagueDate >= period.startDate && s.leagueDate <= period.endDate
-          )
+          ),
+          players
         ),
       },
     });

@@ -130,6 +130,7 @@ export interface FeedResultItem {
   placement: number | null;
   outOf: number;
   dayBest: number | null;
+  compare: Array<{ playerId: string; name: string; color: string; result: string }> | null; // everyone's result in this game that day
   dayBestBy: string | null; // who posted the day's best result in this game
   points: number; // league points this result earns (0 while the game is pending)
   counted: boolean;
@@ -207,8 +208,13 @@ export function buildFeed(
     string,
     { place: number; outOf: number; best: number | null; bestBy: string | null; points: number; counted: boolean }
   >();
+  const compareMap = new Map<string, Array<{ playerId: string; name: string; color: string; result: string }>>();
   for (const d of dates) {
     for (const g of calculateAllDailyStandings(d, d, submissions, players, todayDate, ACTIVE_GAME_SLUGS)) {
+      compareMap.set(
+        `${d}|${g.gameSlug}`,
+        g.rankings.map((r) => ({ playerId: r.playerId, name: r.playerName, color: r.playerColor, result: r.displayResult }))
+      );
       for (const r of g.rankings) {
         placement.set(`${d}|${g.gameSlug}|${r.playerId}`, {
           place: r.placement,
@@ -240,6 +246,7 @@ export function buildFeed(
       placement: pl?.place ?? null,
       outOf: pl?.outOf ?? 0,
       dayBest: pl?.best ?? null,
+      compare: (compareMap.get(`${s.leagueDate}|${s.gameSlug}`)?.length ?? 0) > 1 ? compareMap.get(`${s.leagueDate}|${s.gameSlug}`)! : null,
       dayBestBy: pl?.bestBy ?? null,
       points: pl?.points ?? 0,
       counted: pl?.counted ?? false,
