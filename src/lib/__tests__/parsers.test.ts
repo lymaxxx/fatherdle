@@ -580,3 +580,28 @@ https://guessdash.com/whenography?c=ui0cxt`;
     expect(res.parsed.map((p) => p.gameSlug).sort()).toEqual(["metrodle", "whenography"]);
   });
 });
+
+describe("Flagments newer share format", () => {
+  const found = `Flagments · Nov 27, 2026
+Found it with 1 peek
+⬛⬛⬛⬛⬛⬛
+⬛⬛🟣⬛⬛⬛
+⬛⬛⬛⬛⬛⬛
+⬛⬛⬛⬛⬛⬛
+1,000 pts · no misses
+Best score of the day so far.`;
+
+  it("reads 'Found it' as solved, with the peeks and no misses", () => {
+    const r = parseSingleGameText(found)!;
+    expect(r.gameSlug).toBe("flagments");
+    expect(r.failed).toBe(false);
+    expect(r.primaryValue).toBe(1000);
+    expect(r.secondaryValue).toBe(1);
+    expect(r.tertiaryValue).toBe(0);
+  });
+
+  it("still treats a share with no points as unsolved", () => {
+    const r = parseSingleGameText("Flagments · Nov 27, 2026\nDidn't get it after 15 peeks\nCan you beat 0?")!;
+    expect(r.failed).toBe(true);
+  });
+});

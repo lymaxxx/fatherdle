@@ -832,7 +832,8 @@ export function parseFlagcognito(block: string): ParsedGameSubmission | null {
  */
 export function parseFlagments(block: string): ParsedGameSubmission | null {
   if (!/Flagments/i.test(block)) return null;
-  const solved = /(?<!not\s)solved/i.test(block);
+  // Solved shares say "Solved 🟣" or, in the newer format, "Found it with 1 peek"
+  const solved = /(?<!not\s)solved/i.test(block) || /\bfound it\b/i.test(block);
   const pts = block.match(/([\d,]+)\s*pts?/i);
   // An unsolved game has no points line ("Didn't get it after 15 peeks"); it scores the number in
   // "Can you beat 0?", which is 0.
@@ -843,7 +844,8 @@ export function parseFlagments(block: string): ParsedGameSubmission | null {
   if (!pts && solved) return null; // solved results always show their points
 
   const peeks = block.match(/(\d+)\s*peeks?/i);
-  const misses = block.match(/(\d+)\s*miss(?:es)?/i);
+  const noMisses = /\bno\s+miss(?:es)?\b/i.test(block);
+  const misses = noMisses ? ["0", "0"] : block.match(/(\d+)\s*miss(?:es)?/i);
   const beat = block.match(/beat\s+(\d+)%/i);
   const failed = !solved;
 

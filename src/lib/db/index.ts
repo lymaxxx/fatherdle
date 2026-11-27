@@ -5,7 +5,7 @@ import path from "path";
 import { DEFAULT_PLAYERS } from "../constants";
 import { getLondonDateString } from "../analytics/dates";
 import { GameSlug, Player, Submission } from "../types";
-import { parseMultiGamePaste } from "../parsers";
+import { parseMultiGamePaste, parseFlagments } from "../parsers";
 import quizboisSeed from "../seed/quizbois-seed.json";
 import newGamesBackfill from "../seed/backfill-newgames.json";
 import nov16to22Backfill from "../seed/backfill-nov16-22.json";
@@ -238,6 +238,19 @@ function normalizeResults(data: LeagueData): boolean {
     if (next !== s.displayResult) {
       s.displayResult = next;
       changed = true;
+    }
+    // Flagments shares that say "Found it" were first stored as unsolved; read them again
+    if (s.gameSlug === "flagments" && s.failed && /\bfound it\b/i.test(s.rawText)) {
+      const fixed = parseFlagments(s.rawText);
+      if (fixed && !fixed.failed) {
+        s.primaryValue = fixed.primaryValue;
+        s.secondaryValue = fixed.secondaryValue;
+        s.tertiaryValue = fixed.tertiaryValue;
+        s.displayResult = fixed.displayResult;
+        s.failed = false;
+        s.metadataJson = JSON.stringify(fixed.metadata ?? {});
+        changed = true;
+      }
     }
   }
   return changed;
